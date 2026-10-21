@@ -1,0 +1,839 @@
+;
+;   Cylon Attack - The Onslaught Continues!  A 2D space game
+;   Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+;
+;   This program is free software; you can redistribute it and/or modify
+;   it under the terms of the GNU General Public License as published by
+;   the Free Software Foundation; either version 2 of the License, or
+;   (at your option) any later version.
+;
+;   This program is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+;
+;   You should have received a copy of the GNU General Public License
+;   along with this program; if not, write to the Free Software
+;   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+;
+	AREA |C$$code|, CODE, READONLY
+
+	IMPORT __rt_sdiv
+
+; very non-optimal masked scale routine
+	EXPORT sm_64x64
+sm_64x64
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+; r3 65536/scale factor
+	stmfd r13!,{r4-r7,r14}
+	stmfd r13!,{r0-r3}
+	mov r1,#64*65536
+	mov r0,r3
+	bl __rt_sdiv
+	mov r6,r0
+	ldmfd r13!,{r0-r3}
+	ldmia r2,{r4,r5}
+	; test for edges
+	cmp r4,#0
+	blt smc_64x64
+	cmp r5,#0
+	blt smc_64x64
+	add r7,r4,r6
+	cmp r7,#320
+	bge smc_64x64
+	add r7,r5,r6
+	cmp r7,#256
+	bge smc_64x64
+	; done testing edges, draw scaled thing
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+	mov r5,#0
+rowloop
+	mov r7,r0
+	mov r4,#0
+colloop
+	mov r6,r5,asr #16
+	add r6,r1,r6,lsl #6
+	ldrb r6,[r6,r4,asr #16]
+	add r4,r4,r3
+	cmp r6,#0
+	strneb r6,[r7]
+	add r7,r7,#1
+	cmp r4,#64*65536
+	blt colloop
+
+	add r0,r0,#320
+	add r5,r5,r3
+	cmp r5,#64*65536
+	blt rowloop
+
+	ldmfd r13!,{r4-r7,pc}^
+
+
+	EXPORT smc_64x64
+smc_64x64
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+; r3 65536/scale factor
+; clipped version
+	stmfd r13!,{r8-r12}
+
+	mov r8,r6	; r8 = x limit
+	mov r9,r6	; r9 = y limit
+
+	; r4 x pos
+	; r5 y pos
+	; r6 x,y size
+	cmn r5,r9
+	ble offscreen1
+	cmp r5,#0
+	rsblt r5,r5,#0
+	mullt r11,r3,r5
+	sublt r9,r9,r5
+	movlt r5,#0
+	movge r11,#0
+
+	cmp r5,#256
+	bge offscreen1
+	add r6,r5,r9
+	cmp r6,#256
+	blt highenough
+	sub r6,r5,#256
+	rsbs r9,r6,#0
+	blt offscreen1
+highenough
+
+	cmn r4,r8
+	ble offscreen1
+	cmp r4,#0
+	rsblt r4,r4,#0
+	mullt r10,r3,r4
+	sublt r8,r8,r4
+	movlt r4,#0
+	movge r10,#0	; r10=sprite x-start
+
+	cmp r4,#320
+	bge offscreen1
+	add r6,r4,r8
+	cmp r6,#320
+	blt leftenough
+	sub r6,r4,#320
+	rsbs r8,r6,#0
+	blt offscreen1
+leftenough
+
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+	mov r5,r11
+rowloop3
+	mov r7,r0
+	mov r12,r8	; width
+	mov r4,r10
+colloop3
+	mov r6,r5,asr #16
+	add r6,r1,r6,lsl #6
+	ldrb r6,[r6,r4,asr #16]
+	add r4,r4,r3
+	cmp r6,#0
+	strneb r6,[r7]
+	add r7,r7,#1
+	subs r12,r12,#1
+	bgt colloop3
+
+	add r0,r0,#320
+	add r5,r5,r3
+	subs r9,r9,#1
+	bgt rowloop3
+
+offscreen1
+	ldmfd r13!,{r8-r12}
+	ldmfd r13!,{r4-r7,pc}^
+
+;	stmfd r13!,{r4-r5,r14}
+
+;	ldmfd r13!,{r4-r5,pc}
+
+
+; whiteout version
+	EXPORT smw_64x64
+smw_64x64
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+; r3 65536/scale factor
+	stmfd r13!,{r4-r7,r14}
+	stmfd r13!,{r0-r3}
+	mov r1,#64*65536
+	mov r0,r3
+	bl __rt_sdiv
+	mov r6,r0
+	ldmfd r13!,{r0-r3}
+	ldmia r2,{r4,r5}
+	; test for edges (can't be arsed with clipped whiteout really)
+	cmp r4,#0
+	blt smc_64x64
+	cmp r5,#0
+	blt smc_64x64
+	add r7,r4,r6
+	cmp r7,#320
+	bge smc_64x64
+	add r7,r5,r6
+	cmp r7,#256
+	bge smc_64x64
+	; done testing edges, draw scaled thing
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+	mov r5,#0
+rowloopw
+	mov r7,r0
+	mov r4,#0
+colloopw
+	mov r6,r5,asr #16
+	add r6,r1,r6,lsl #6
+	ldrb r6,[r6,r4,asr #16]
+	add r4,r4,r3
+	cmp r6,#0
+	movne r6,#255
+	strneb r6,[r7]
+	add r7,r7,#1
+	cmp r4,#64*65536
+	blt colloopw
+
+	add r0,r0,#320
+	add r5,r5,r3
+	cmp r5,#64*65536
+	blt rowloopw
+
+	ldmfd r13!,{r4-r7,pc}^
+
+
+
+; another one, used by laser shots
+	EXPORT sm_32x16
+sm_32x16
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+; r3 65536/scale factor
+	stmfd r13!,{r4-r7,r14}
+	stmfd r13!,{r0-r3}
+	mov r1,#64*65536
+	mov r0,r3
+	bl __rt_sdiv
+	mov r6,r0
+	ldmfd r13!,{r0-r3}
+	ldmia r2,{r4,r5}
+	; test for edges
+	cmp r4,#0
+	blt smc_32x16
+	cmp r5,#0
+	blt smc_32x16
+	add r7,r4,r6,asr #1
+	cmp r7,#320
+	bge smc_32x16
+	add r7,r5,r6,asr #2
+	cmp r7,#256
+	bge smc_32x16
+	; done testing edges, draw scaled thing
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+	mov r5,#0
+rowloop2
+	mov r7,r0
+	mov r4,#0
+colloop2
+	mov r6,r5,asr #16
+	add r6,r1,r6,lsl #5
+	ldrb r6,[r6,r4,asr #16]
+	add r4,r4,r3
+	cmp r6,#0
+	strneb r6,[r7]
+	add r7,r7,#1
+	cmp r4,#32*65536
+	blt colloop2
+
+	add r0,r0,#320
+	add r5,r5,r3
+	cmp r5,#16*65536
+	blt rowloop2
+
+	ldmfd r13!,{r4-r7,pc}^
+
+
+	EXPORT smc_32x16
+smc_32x16
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+; r3 65536/scale factor
+; clipped version
+	ldmfd r13!,{r4-r7,pc}^
+
+;	stmfd r13!,{r4-r5,r14}
+
+;	ldmfd r13!,{r4-r5,pc}
+
+
+	EXPORT um_64x64
+um_64x64
+	stmfd r13!,{r4-r5,r14}
+	; blah
+	ldmfd r13!,{r4-r5,pc}^
+
+
+	EXPORT m_32x16
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+m_32x16
+	stmfd r13!,{r4-r8,r14}
+	ldmia r2,{r3,r4}
+
+	cmp r3,#0
+	blt mc_32x16
+	cmp r4,#0
+	blt mc_32x16
+	add r5,r3,#32
+	cmp r5,#320
+	bge mc_32x16
+	add r5,r4,#16
+	cmp r5,#256
+	bge mc_32x16
+
+	add r0,r0,r4,asl #8
+	add r0,r0,r4,asl #6
+	add r0,r0,r3
+	mov r7,#16
+rowloopm3216
+	mov r4,r0
+	mov r6,#32
+colloopm3216
+	ldr r5,[r1],#4
+	cmp r5,#0
+	addeq r4,r4,#4
+	beq skip4
+
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	mov r5,r5,lsr #8
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	mov r5,r5,lsr #8
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	mov r5,r5,lsr #8
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+skip4
+	subs r6,r6,#4
+	bgt colloopm3216
+
+	add r0,r0,#320
+
+	subs r7,r7,#1
+	bgt rowloopm3216
+
+	ldmfd r13!,{r4-r8,pc}^
+
+
+	EXPORT mw_32x16
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+mw_32x16
+	stmfd r13!,{r4-r8,r14}
+	ldmia r2,{r3,r4}
+
+	cmp r3,#0
+	blt mc_32x16
+	cmp r4,#0
+	blt mc_32x16
+	add r5,r3,#32
+	cmp r5,#320
+	bge mc_32x16
+	add r5,r4,#16
+	cmp r5,#256
+	bge mc_32x16
+
+	add r0,r0,r4,asl #8
+	add r0,r0,r4,asl #6
+	add r0,r0,r3
+
+	mov r8,#255
+
+	mov r7,#16
+rowloopm3216w
+	mov r4,r0
+	mov r6,#32
+colloopm3216w
+	ldr r5,[r1],#4
+	cmp r5,#0
+	addeq r4,r4,#4
+	beq skip4w
+
+	tst r5,#&ff
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	tst r5,#&ff00
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	tst r5,#&ff0000
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	tst r5,#&ff000000
+	strneb r8,[r4]
+	add r4,r4,#1
+skip4w
+	subs r6,r6,#4
+	bgt colloopm3216w
+
+	add r0,r0,#320
+
+	subs r7,r7,#1
+	bgt rowloopm3216w
+
+	ldmfd r13!,{r4-r8,pc}^
+
+
+mc_32x16
+; clipped version
+	ldmfd r13!,{r4-r8,pc}^
+
+
+	EXPORT m_48x32
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) position
+m_48x32
+	stmfd r13!,{r4-r8,r14}
+	ldmia r2,{r3,r4}
+
+	add r0,r0,r4,asl #8
+	add r0,r0,r4,asl #6
+	add r0,r0,r3
+	mov r7,#32
+rowloopm4832
+	mov r4,r0
+	mov r6,#48
+colloopm4832
+	ldr r5,[r1],#4
+	cmp r5,#0
+	addeq r4,r4,#4
+	beq skip4b
+
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	mov r5,r5,lsr #8
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	mov r5,r5,lsr #8
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+
+	mov r5,r5,lsr #8
+	ands r8,r5,#255
+	strneb r8,[r4]
+	add r4,r4,#1
+skip4b
+	subs r6,r6,#4
+	bgt colloopm4832
+
+	add r0,r0,#320
+
+	subs r7,r7,#1
+	bgt rowloopm4832
+
+	ldmfd r13!,{r4-r8,pc}^
+
+
+	EXPORT m_XxY
+m_XxY
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) top left
+; r3 *(x,y) size
+	stmfd r13!,{r4-r9,r14}
+	ldmia r2,{r4,r5}
+	ldmia r3,{r6,r7}
+	orrs r8,r4,r5
+	bmi mc_XxY
+	add r8,r4,r6
+	cmp r8,#320
+	bge mc_XxY
+	add r8,r5,r7
+	cmp r8,#256
+	bge mc_XxY
+
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+	mov r4,r6
+	mov r5,r7
+yloop
+	mov r6,r0
+	mov r8,r4
+xloop
+	ldr r7,[r1],#4
+	cmp r7,#0
+	addeq r6,r6,#4
+	beq miss4
+
+	ands r9,r7,#255
+	strneb r9,[r6]
+	add r6,r6,#1
+
+	mov r9,r7,lsr #8
+	ands r9,r9,#255
+	strneb r9,[r6]
+	add r6,r6,#1
+
+	mov r9,r7,lsr #16
+	ands r9,r9,#255
+	strneb r9,[r6]
+	add r6,r6,#1
+
+	mov r9,r7,lsr #24
+	ands r9,r9,#255
+	strneb r9,[r6]
+	add r6,r6,#1
+miss4
+	subs r8,r8,#4
+	bgt xloop
+
+	add r0,r0,#320
+
+	subs r5,r5,#1
+	bgt yloop
+
+	ldmfd r13!,{r4-r9,pc}^
+
+
+	EXPORT mc_XxY
+mc_XxY
+; clipped version
+	stmfd r13!,{r10-r12}
+
+	sub r1,r1,#4
+
+; clip to bottom
+	cmp r5,#256
+	bge offscreen3
+	add r8,r5,r7
+	cmp r8,#256
+	rsbge r7,r5,#256
+
+; clip to top
+	cmn r5,r7
+	ble offscreen3
+	cmp r5,#0
+	rsblt r5,r5,#0
+	mlalt r1,r6,r5,r1
+	sublt r7,r7,r5
+	movlt r5,#0
+
+	mov r12,#0	; lhs of displayed row
+	mov r11,r6	; length of displayed row
+
+; clip to right
+	cmp r4,#320
+	bge offscreen3
+	add r8,r4,r6
+	cmp r8,#316
+	rsbge r11,r4,#316
+	addge r11,r11,#3
+	bicge r11,r11,#3
+
+; clip to left
+	cmn r4,r6
+	ble offscreen3
+	cmp r4,#0
+	bge nolc2
+	rsb r4,r4,#0
+	add r12,r4,#4
+	bic r12,r12,#3
+	sub r11,r11,r12
+	and r8,r4,#3
+	eor r8,r8,#3
+	add r0,r0,r8
+	mov r4,#0
+nolc2
+
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+
+	mov r4,r6
+	mov r5,r7
+
+; initialise offset stuff
+	and r2,r0,#3
+	eor r2,r2,#3
+	mov r2,r2,asl #3
+	rsb r3,r2,#32
+	bic r0,r0,#3
+oyloop3
+	mov r6,r0
+	mov r8,r11	; row length
+	stmfd r13!,{r1,r11,r12}
+	add r1,r1,r12   ; r12 is row offset
+	ldmia r1,{r9,r10,r11}
+	add r1,r1,#12
+oxloop3
+	mov r9,r9,lsr r2
+	orr r9,r9,r10,lsl r3
+	mov r10,r10,lsr r2
+	orr r10,r10,r11,lsl r3
+	orrs r7,r9,r10	; don't want the result
+	beq oskip83
+
+	ldmia r6,{r7,r12}
+	; it's not nice.
+	tst r9,#&FF
+	bicne r7,r7,#&FF
+	tst r9,#&FF00
+	bicne r7,r7,#&FF00
+	tst r9,#&FF0000
+	bicne r7,r7,#&FF0000
+	tst r9,#&FF000000
+	bicne r7,r7,#&FF000000
+	tst r10,#&FF
+	bicne r12,r12,#&FF
+	tst r10,#&FF00
+	bicne r12,r12,#&FF00
+	tst r10,#&FF0000
+	bicne r12,r12,#&FF0000
+	tst r10,#&FF000000
+	bicne r12,r12,#&FF000000
+	orr r7,r7,r9
+	orr r12,r12,r10
+	stmia r6,{r7,r12}
+oskip83
+	add r6,r6,#8
+	subs r8,r8,#8
+	mov r9,r11
+	ldmia r1!,{r10,r11}
+	bgt oxloop3
+
+	tst r8,#4
+	bne norhscol2
+	mov r9,r9,lsr r2
+	orr r9,r9,r10,lsl r3
+	ldr r7,[r6]
+	tst r9,#&FF
+	bicne r7,r7,#&FF
+	tst r9,#&FF00
+	bicne r7,r7,#&FF00
+	tst r9,#&FF0000
+	bicne r7,r7,#&FF0000
+	tst r9,#&FF000000
+	bicne r7,r7,#&FF000000
+	orr r7,r7,r9
+	str r7,[r6]
+norhscol2
+
+	ldmfd r13!,{r1,r11,r12}
+	add r1,r1,r4	; next row
+
+	add r0,r0,#320
+
+	subs r5,r5,#1
+	bgt oyloop3
+
+offscreen3
+
+	ldmfd r13!,{r10-r12}
+	ldmfd r13!,{r4-r9,pc}^
+
+
+; same as last, but OR onto screen
+	EXPORT om_XxY
+om_XxY
+; r0 screenbase
+; r1 bitmap
+; r2 *(x,y) top left
+; r3 *(x,y) size
+	stmfd r13!,{r4-r12,r14}
+	ldmia r2,{r4,r5}
+	ldmia r3,{r6,r7}
+	orrs r8,r4,r5
+	bmi omc_XxY
+	add r8,r6,r4
+	cmp r8,#320
+	bge omc_XxY
+	add r8,r7,r5
+	cmp r8,#256
+	bge omc_XxY
+
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+
+	mov r4,r6
+	mov r5,r7
+
+; initialise offset stuff
+	and r2,r0,#3
+	eor r2,r2,#3
+	mov r2,r2,asl #3
+	rsb r3,r2,#32
+	bic r0,r0,#3
+	ldmia r1,{r9,r10,r11}
+	add r1,r1,#12
+oyloop
+	mov r6,r0
+	mov r8,r4	; row length
+oxloop
+	mov r9,r9,lsr r2
+	orr r9,r9,r10,lsl r3
+	mov r10,r10,lsr r2
+	orr r10,r10,r11,lsl r3
+	orrs r7,r9,r10	; don't want the result
+	beq oskip8
+
+	ldmia r6,{r7,r12}
+	orr r7,r7,r9
+	orr r12,r12,r10
+	stmia r6,{r7,r12}
+oskip8
+	add r6,r6,#8
+	subs r8,r8,#8
+	mov r9,r11
+	ldmia r1!,{r10,r11}
+	bgt oxloop
+
+	add r0,r0,#320
+
+	subs r5,r5,#1
+	bgt oyloop
+
+	ldmfd r13!,{r4-r12,pc}
+
+; clipped ORred thing
+omc_XxY
+
+; clip to bottom
+	cmp r5,#256
+	bge offscreen2
+	add r8,r5,r7
+	cmp r8,#256
+	rsbge r7,r5,#256
+
+; clip to top
+	cmn r5,r7
+	ble offscreen2
+	cmp r5,#0
+	rsblt r5,r5,#0
+	mlalt r1,r6,r5,r1
+	sublt r7,r7,r5
+	movlt r5,#0
+
+	mov r12,#0	; lhs of displayed row
+	mov r11,r6	; length of displayed row
+
+; clip to right
+	cmp r4,#320
+	bge offscreen2
+	add r8,r4,r6
+	cmp r8,#316
+	rsbge r11,r4,#316
+	addge r11,r11,#3
+	bicge r11,r11,#3
+
+; clip to left
+	cmn r4,r6
+	ble offscreen2
+	cmp r4,#0
+	bge nolc
+	rsb r4,r4,#0
+	add r12,r4,#4
+	bic r12,r12,#3
+	sub r11,r11,r12
+	and r8,r4,#3
+	eor r8,r8,#3
+	add r0,r0,r8
+	mov r4,#0
+nolc
+
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+
+	mov r4,r6
+	mov r5,r7
+
+; initialise offset stuff
+	and r2,r0,#3
+	eor r2,r2,#3
+	mov r2,r2,asl #3
+	rsb r3,r2,#32
+	bic r0,r0,#3
+oyloop2
+	mov r6,r0
+	mov r8,r11	; row length
+	stmfd r13!,{r1,r11,r12}
+	add r1,r1,r12   ; r12 is row offset
+	ldmia r1,{r9,r10,r11}
+	add r1,r1,#12
+oxloop2
+	mov r9,r9,lsr r2
+	orr r9,r9,r10,lsl r3
+	mov r10,r10,lsr r2
+	orr r10,r10,r11,lsl r3
+	orrs r7,r9,r10	; don't want the result
+	beq oskip82
+
+	ldmia r6,{r7,r12}
+	orr r7,r7,r9
+	orr r12,r12,r10
+	stmia r6,{r7,r12}
+oskip82
+	add r6,r6,#8
+	subs r8,r8,#8
+	mov r9,r11
+	ldmia r1!,{r10,r11}
+	bgt oxloop2
+
+	tst r8,#4
+	bne norhscol
+	mov r9,r9,lsr r2
+	orr r9,r9,r10,lsl r3
+	ldr r7,[r6]
+	orr r7,r7,r9
+	str r7,[r6]
+norhscol
+
+	ldmfd r13!,{r1,r11,r12}
+	add r1,r1,r4	; next row
+
+	add r0,r0,#320
+
+	subs r5,r5,#1
+	bgt oyloop2
+
+offscreen2
+	ldmfd r13!,{r4-r12,pc}
+
+
+	END

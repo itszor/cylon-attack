@@ -1,0 +1,230 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "swis.h"
+
+#include "c3d.h"
+
+#include "scene.h"
+#include "game.h"
+#include "scale.h"
+#include "hiscore.h"
+#include "rectangle.h"
+
+void maketransform(point* pos, point* basepos, point* heading,
+                   matrix* dest, point* around, int factor)
+{
+  pos->x = basepos->x+((factor*heading->x)>>4);
+  pos->y = basepos->y+((factor*heading->y)>>4);
+  pos->z = basepos->z+((factor*heading->z)>>4);
+  c3d_generatematrix(dest, around, factor);
+}
+
+void titlesequence(gameinfo* game)
+{
+  int timethen, timenow;
+  sceneinfo* scene = game->scene;
+  matrix orient = {4096,0,0, 0,4096,0, 0,0,4096};
+  matrix orient2;
+  static point lpos[] = {{-16384,4096,32768},
+                               {-8192,4096,32768},
+                               {0,4096,32768},
+                               {8192,4096,32768},
+                               {16384,4096,32768}};
+  static point spos[] = {{-17182,-4096,32768},
+                               {-10400,-4096,32768},
+                               {-3165,-4096,32768},
+                               {3617,-4096,32768},
+                               {9948,-4096,32768},
+                               {16729,-4096,32768}};
+  point pos = {0,-4096,32768};
+  point heading[11];
+  point angles[11];
+  int i, is=64, counter=0;
+  int done=0;
+  const int delay=500;
+  int* store;
+
+  store = c_newarray(int, 20480);
+
+  c3d_clearbank(store);
+
+  for (i=0; i<11; i++)
+  {
+    do {
+      angles[i].x = (rand()&511)-256;
+      angles[i].y = (rand()&511)-256;
+      angles[i].z = (rand()&511)-256;
+    } while (abs(angles[i].x)+abs(angles[i].y)+abs(angles[i].z)<128);
+    c3d_normalize(&angles[i]);
+
+    heading[i].x = (rand()&511)-256;
+    heading[i].y = (rand()&511)-256;
+    heading[i].z = rand()&255;
+  }
+
+  timethen=timenow=c3d_gettime();
+
+  scene->viewbuf->pos.x = scene->viewbuf->pos.y = scene->viewbuf->pos.z = 0;
+  scene->viewbuf->orient = orient;
+
+  i=1024;
+
+  while (i>0 && !done)
+  {
+    scene->buffer = bank(scene, 1-scene->viewbuf->bank);
+//    c3d_clearbank(scene->buffer);
+    memcpy(scene->buffer, scene->bitmaps.backdrop, 81920);
+
+    c3d_startframe(scene->viewbuf);
+    // large letters
+    maketransform(&pos, &lpos[0], &heading[0], &orient2, &angles[0], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.large.c, &orient2, &pos, 0);
+    maketransform(&pos, &lpos[1], &heading[1], &orient2, &angles[1], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.large.y, &orient2, &pos, 0);
+    maketransform(&pos, &lpos[2], &heading[2], &orient2, &angles[2], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.large.l, &orient2, &pos, 0);
+    maketransform(&pos, &lpos[3], &heading[3], &orient2, &angles[3], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.large.o, &orient2, &pos, 0);
+    maketransform(&pos, &lpos[4], &heading[4], &orient2, &angles[4], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.large.n, &orient2, &pos, 0);
+    // small letters
+    maketransform(&pos, &spos[0], &heading[5], &orient2, &angles[5], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.small.a, &orient2, &pos, 0);
+    maketransform(&pos, &spos[1], &heading[6], &orient2, &angles[6], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.small.t, &orient2, &pos, 0);
+    maketransform(&pos, &spos[2], &heading[7], &orient2, &angles[7], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.small.t2, &orient2, &pos, 0);
+    maketransform(&pos, &spos[3], &heading[8], &orient2, &angles[8], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.small.a2, &orient2, &pos, 0);
+    maketransform(&pos, &spos[4], &heading[9], &orient2, &angles[9], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.small.c, &orient2, &pos, 0);
+    maketransform(&pos, &spos[5], &heading[10], &orient2, &angles[10], i<<2);
+    c3d_addobject(scene->viewbuf, scene->letters.small.k, &orient2, &pos, 0);
+    c3d_endframe(scene->viewbuf);
+
+    c3d_displayframe(scene->viewbuf);
+    if (c3d_keydown(-99)) done=1;
+
+    timethen=timenow;
+    timenow=c3d_gettime();
+
+    // oooh...
+    i-=timenow-timethen;
+    if (i<0) i=0;
+  }
+
+  i=0;
+
+  while (!done)
+  {
+    int part=c3d_gettime();
+    int rows, total;
+    int index;
+
+    while (!done && (c3d_gettime()-part)<delay)
+    {
+      const point2d pos={13,192};
+      const point2d pos2={116,240};
+
+      scene->buffer = &scene->viewbuf->buffer.screenbase[(1-scene->viewbuf->bank)*20480];
+
+//      c3d_clearbank(scene->buffer);
+      memcpy(scene->buffer, scene->bitmaps.backdrop, 81920);
+
+      scene->viewbuf->pos.z = i;
+
+      c3d_startframe(scene->viewbuf);
+      // large letters
+      c3d_addobject(scene->viewbuf, scene->letters.large.c, &orient, &lpos[0], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.large.y, &orient, &lpos[1], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.large.l, &orient, &lpos[2], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.large.o, &orient, &lpos[3], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.large.n, &orient, &lpos[4], 0);
+      // small letters
+      c3d_addobject(scene->viewbuf, scene->letters.small.a, &orient, &spos[0], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.small.t, &orient, &spos[1], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.small.t2, &orient, &spos[2], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.small.a2, &orient, &spos[3], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.small.c, &orient, &spos[4], 0);
+      c3d_addobject(scene->viewbuf, scene->letters.small.k, &orient, &spos[5], 0);
+      c3d_endframe(scene->viewbuf);
+
+      m_XxY(game->scene->buffer, game->scene->bitmaps.message[3], &pos, &MESSAGESIZES[3]);
+      if ((counter&31)>15)
+        m_XxY(game->scene->buffer, game->scene->bitmaps.message[4], &pos2, &MESSAGESIZES[4]);
+
+      c3d_displayframe(scene->viewbuf);
+      if (c3d_keydown(-99)) done=1;
+
+      timethen=timenow;
+      timenow=c3d_gettime();
+
+      i += is*(timenow-timethen);
+      counter += timenow-timethen;
+      if (i>0) {
+        i=0;
+        is=-64;
+      }
+      if (i<-4096) {
+        i=-4096;
+        is=64;
+      }
+    }
+
+    memcpy(store, bank(scene, scene->viewbuf->bank), 81920);
+
+    for (index=0; index<24 && !done; index+=8)
+    {
+      scene->buffer = bank(scene, !scene->viewbuf->bank);
+      c3d_clearbank(scene->buffer);
+      drawhiscores(game, index);
+
+      for (total=0, rows=1; total+rows<255; total+=rows, rows++)
+      {
+        _swix(OS_Byte, _IN(0), 19);
+        _swix(OS_Byte, _IN(0), 19);
+        scroller(bank(scene, scene->viewbuf->bank), bank(scene, !scene->viewbuf->bank),
+                 total, rows);
+      }
+      c3d_displayframe(scene->viewbuf);
+
+      part = c3d_gettime();
+      while (c3d_gettime()-part<150 && !done) if (c3d_keydown(-99)) done=1;
+    }
+
+    memcpy(bank(scene, !scene->viewbuf->bank), store, 81920);
+
+    if (!done)
+    {
+      for (total=0, rows=1; total+rows<255; total+=rows, rows++)
+      {
+        _swix(OS_Byte, _IN(0), 19);
+        _swix(OS_Byte, _IN(0), 19);
+        scroller(bank(scene, scene->viewbuf->bank), bank(scene, !scene->viewbuf->bank),
+                 total, rows);
+      }
+      c3d_displayframe(scene->viewbuf);
+    }
+  }
+  free(store);
+}

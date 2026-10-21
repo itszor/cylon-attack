@@ -1,0 +1,72 @@
+Applied by the Makefile to a copy of ../source.
+
+- 64-bit host: pointer arithmetic through intptr_t rather than int (the same
+  on the 32-bit original).
+- insertscore shifted the table down from hiscores[23] to hiscores[24], one
+  past its end: the 8 bytes after the gameinfo block. On RISC OS that was
+  the next heap block's header; on libroger's heap (no headers in emulated
+  memory) it's the next block itself, the sceneinfo, whose viewbuf it
+  overwrote. The last entry now drops off the table instead.
+
+--- a/test.c	2026-10-21 10:07:38.626738192 +0100
++++ b/test.c	2026-10-21 10:07:38.630612499 +0100
+@@ -72,13 +72,13 @@
+ 
+   dest = malloc(bytesize*num);
+   temp = c3d_loadfile(pathname);
+-  spr1 = (int*)((int)temp+temp[1]-4);
++  spr1 = (int*)((intptr_t)temp+temp[1]-4);
+ 
+   for (i=0; i<num; i++)
+   {
+-    sprdat = (int*)((int)spr1+spr1[8]);
++    sprdat = (int*)((intptr_t)spr1+spr1[8]);
+     memcpy(&dest[i*bytesize/4], sprdat, bytesize);
+-    spr1 = (int*)((int)spr1+spr1[0]);
++    spr1 = (int*)((intptr_t)spr1+spr1[0]);
+   }
+ 
+   free(temp);
+@@ -91,15 +91,15 @@
+   int *spr1, *sprdat, *temp, i, bytesize;
+ 
+   temp = c3d_loadfile(pathname);
+-  spr1 = (int*)((int)temp+temp[1]-4);
++  spr1 = (int*)((intptr_t)temp+temp[1]-4);
+ 
+   for (i=0; i<num; i++)
+   {
+     bytesize = sizes[i].x*sizes[i].y;
+     bases[i] = malloc(bytesize);
+-    sprdat = (int*)((int)spr1+spr1[8]);
++    sprdat = (int*)((intptr_t)spr1+spr1[8]);
+     memcpy(bases[i], sprdat, bytesize);
+-    spr1 = (int*)((int)spr1+spr1[0]);
++    spr1 = (int*)((intptr_t)spr1+spr1[0]);
+   }
+ 
+   free(temp);
+--- a/vbuf.c	2026-10-21 10:07:38.627884821 +0100
++++ b/vbuf.c	2026-10-21 10:07:38.632445691 +0100
+@@ -186,8 +186,8 @@
+       int* pixmap, offset;
+       // could be cached, but speed probably unimportant anyway if we're plotting to a sprite...
+       offset = _swi(OS_SpriteOp, _INR(0,1) | _RETURN(4), 256+8, buf->buffer.pixmap);
+-      pixmap = (int*) ((int) buf->buffer.pixmap) + offset;
+-      pixmap = (int*) ((int) pixmap) + pixmap[8];
++      pixmap = (int*) ((intptr_t) buf->buffer.pixmap) + offset;
++      pixmap = (int*) ((intptr_t) pixmap) + pixmap[8];
+       c3d_render(buf->listbuf, buf->polygonbuf, buf->dec, pixmap);
+     }
+     break;
+--- a/hiscore.c	2026-10-21 10:34:12.257266177 +0100
++++ b/hiscore.c	2026-10-21 10:34:12.262688383 +0100
+@@ -49,7 +49,7 @@
+ 
+   for (pos=0; pos<24 && game->hiscores[pos].score>score; pos++);
+   if (pos==24) return;
+-  for (copy=23; copy>=pos; copy--) game->hiscores[copy+1]=game->hiscores[copy];
++  for (copy=22; copy>=pos; copy--) game->hiscores[copy+1]=game->hiscores[copy];
+ 
+   game->hiscores[pos].score = score;
+   strncpy(game->hiscores[pos].initials, "   ", 3);

@@ -1,0 +1,23 @@
+/*
+**    Name: intmath.c
+**
+**    Date: Wed Aug 19 19:48:41 1998
+**
+*/
+
+#include "intmath.h"
+
+int* c3d_sintab;
+int* c3d_costab;
+
+int c3d_sini12(int n)
+{
+  int lo = c3d_sintab[(n>>4) & 1023], hi = c3d_sintab[((n>>4)+1) & 1023];
+  return lo+(((hi-lo)*(n & 15)) >> 4);
+}
+
+int c3d_cosi12(int n)
+{
+  int lo = c3d_costab[(n>>4) & 1023], hi = c3d_costab[((n>>4)+1) & 1023];
+  return lo+(((hi-lo)*(n & 15)) >> 4);
+}

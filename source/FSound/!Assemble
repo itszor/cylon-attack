@@ -1,0 +1,3 @@
+dir <obey$dir>
+wimpslot -min 640k -max 640k
+run <obey$dir>.modsource3

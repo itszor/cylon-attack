@@ -1,0 +1,67 @@
+
+	IMPORT c3d_divtab
+	IMPORT c3d_screenbase
+	IMPORT c3d_workspace
+	IMPORT c3d_fogclut
+
+	AREA |ttt$$data|, DATA
+
+texturewidth
+	DCD	0
+
+; element in array
+TOP	EQU	0
+HEIGHT	EQU	4
+XSTART	EQU	8
+XDELTA	EQU	12
+SX	EQU	16
+SY	EQU	20
+DEPTH	EQU	24
+SXD	EQU	28
+SYD	EQU	32
+DEPTHD	EQU	36
+ILENGTH	EQU	40
+PLENGTH	EQU	64
+SLENGTH	EQU	6
+
+
+; temporary buffer used during calculation of segment info
+MX0	EQU	0
+MY0	EQU	4
+MX1	EQU	8
+MY1	EQU	12
+MTX0	EQU	16
+MTY0	EQU	20
+MTX1	EQU	24
+MTY1	EQU	28
+MD0	EQU	32
+MD1	EQU	36
+
+	MACRO
+	swap $source, $dest
+	eor $source,$source,$dest
+	eor $dest,$source,$dest
+	eor $source,$source,$dest
+	MEND
+
+	MACRO
+	compare_swap $a,$b
+	ldr r5,[r2,#$a*PLENGTH+TOP]		; ytop(a)
+	ldr r6,[r2,#$b*PLENGTH+TOP]		; ytop(b)
+	cmp r5,r6
+	ble %f1
+	add r5,r2,#$a*PLENGTH
+	add r6,r2,#$b*PLENGTH
+	mov r7,#ILENGTH-4
+2
+	ldr r8,[r5,r7]
+	ldr r9,[r6,r7]
+	str r8,[r6,r7]
+	str r9,[r5,r7]
+	subs r7,r7,#4
+	bge %b2
+1
+	MEND
+
+
+	END

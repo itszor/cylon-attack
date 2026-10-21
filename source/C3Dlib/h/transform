@@ -1,0 +1,17 @@
+/*
+**    Name: transform.h
+**
+**    Date: Sat Dec 26 23:11:47 1998
+**
+*/
+
+#ifndef C3D_TRANSFORM_H
+#define C3D_TRANSFORM_H 1
+
+void c3d_scaleobject(object* obj, int scale);
+void c3d_translateobject(object* obj, point* translate);
+void c3d_transformobject(object* obj, matrix* m);
+void c3d_generatematrix(matrix* m, point* axis, int angle);
+void c3d_cleanmatrix(matrix* m);
+
+#endif

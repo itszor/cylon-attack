@@ -1,0 +1,72 @@
+;
+;   Cylon Attack - The Onslaught Continues!  A 2D space game
+;   Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+;
+;   This program is free software; you can redistribute it and/or modify
+;   it under the terms of the GNU General Public License as published by
+;   the Free Software Foundation; either version 2 of the License, or
+;   (at your option) any later version.
+;
+;   This program is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+;
+;   You should have received a copy of the GNU General Public License
+;   along with this program; if not, write to the Free Software
+;   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+;
+; Little bit of macro from SWINames.h
+Auto_Error_SWI_bit_number * 17
+Auto_Error_SWI_bit * 1 :SHL: Auto_Error_SWI_bit_number
+
+        GBLS    SWIClass
+        MACRO
+        AddSWI  $SWIName,$value
+  [     "$value" = ""
+$SWIClass._$SWIName # 1
+  |
+$SWIClass._$SWIName * $value
+  ]
+X$SWIClass._$SWIName * $SWIClass._$SWIName + Auto_Error_SWI_bit
+        MEND
+
+
+SWIClass SETS	"FlexiSound"
+	^	&4E0C0
+	AddSWI	Add
+	AddSWI	Remove
+	AddSWI	Play
+	AddSWI	ReturnInfo
+	AddSWI	SaveOpen
+	AddSWI	LoadOpen
+	AddSWI	LinToLog
+	AddSWI	PlayFromDisc
+	AddSWI	PlayFromRAM
+	AddSWI	Stop
+	AddSWI	ReadTimer1
+
+	AREA |fsndcode$$code|, CODE, READONLY
+
+	EXPORT flexisound_add
+	EXPORT flexisound_remove
+	EXPORT flexisound_play
+	EXPORT readtimer1
+
+flexisound_add
+	swi FlexiSound_Add
+	movs pc,r14
+
+flexisound_remove
+	swi FlexiSound_Remove
+	movs pc,r14
+
+flexisound_play
+	swi FlexiSound_Play
+	movs pc,r14
+
+readtimer1
+	swi FlexiSound_ReadTimer1
+	movs pc,r14
+
+	END

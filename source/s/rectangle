@@ -1,0 +1,224 @@
+;
+;   Cylon Attack - The Onslaught Continues!  A 2D space game
+;   Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+;
+;   This program is free software; you can redistribute it and/or modify
+;   it under the terms of the GNU General Public License as published by
+;   the Free Software Foundation; either version 2 of the License, or
+;   (at your option) any later version.
+;
+;   This program is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+;
+;   You should have received a copy of the GNU General Public License
+;   along with this program; if not, write to the Free Software
+;   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+;
+	AREA |C$$code|, CODE, READONLY
+
+OS_Byte	EQU	0x6
+
+	EXPORT rectangle
+; slightly odd restriction currently that lhs must be a multiple of 4,
+; but size can be anything...
+rectangle
+; r0 screenbase
+; r1 colour
+; r2 *(x,y) top corner
+; r3 *(x,y) size
+	stmfd r13!,{r4-r12,r14}
+	ldmia r2,{r4,r5}
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+	ldmia r3,{r2,r3}
+	mov r4,r1
+	mov r5,r1
+	mov r6,r1
+	mov r7,r1
+	mov r8,r1
+	mov r9,r1
+	mov r10,r1
+yfill
+	subs r12,r2,#32
+	mov r11,r0
+	blt quiteshort
+xfill
+	stmia r11!,{r1,r4,r5,r6,r7,r8,r9,r10}
+	subs r12,r12,#32
+	bge xfill
+quiteshort
+
+	tst r12,#16
+	stmneia r11!,{r1,r4,r5,r6}
+
+	tst r12,#8
+	stmneia r11!,{r1,r4}
+
+	tst r12,#4
+	strne r1,[r11],#4
+
+	ands r12,r12,#3
+	beq donerow
+xfillb
+	strb r1,[r11],#1
+	subs r12,r12,#1
+	bgt xfillb
+
+donerow
+	add r0,r0,#320
+	subs r3,r3,#1
+	bgt yfill
+
+	ldmfd r13!,{r4-r12,pc}^
+
+
+	EXPORT shadedrect
+shadedrect
+; r0 screenbase
+; r1 *(x,y) top left
+; r2 *(x,y) size
+; r3 colour - low byte, top-left shade & high byte, bottom-right shade
+	stmfd r13!,{r0-r11,r14}
+	ldmia r1,{r4,r5}
+	ldmia r2,{r6,r7}
+	mov r9,r0
+	add r0,r0,r5,lsl #8
+	add r0,r0,r5,lsl #6
+	add r0,r0,r4
+	add r8,r5,r7
+	add r1,r9,r8,lsl #8
+	add r1,r1,r8,lsl #6
+	add r1,r1,r4
+	mov r9,r3,lsr #8
+	mov r11,r6
+	mov r10,r0
+horiz
+	strb r9,[r1],#1
+	strb r3,[r0],#1
+	subs r6,r6,#1
+	bgt horiz
+
+	mov r0,r10
+	add r1,r0,r11
+vert
+	strb r9,[r1],#320
+	strb r3,[r0],#320
+	subs r7,r7,#1
+	bge vert
+
+	ldmfd r13!,{r0-r11,pc}^
+
+
+	EXPORT fillmem
+fillmem
+	stmfd r13!,{r4-r9,r14}
+	mov r2,r1
+	mov r3,r1
+	mov r4,r1
+	mov r5,r1
+	mov r6,r1
+	mov r7,r1
+	mov r8,r1
+	mov r9,#81920
+fillloop
+	stmia r0!,{r1-r8}
+	subs r9,r9,#32
+	bgt fillloop
+
+	EXPORT ormem
+ormem
+	stmfd r13!,{r4-r10,r14}
+	mov r10,#81920
+orloop
+	ldmia r0,{r2-r9}
+	orr r2,r2,r1
+	orr r3,r3,r1
+	orr r4,r4,r1
+	orr r5,r5,r1
+	orr r6,r6,r1
+	orr r7,r7,r1
+	orr r8,r8,r1
+	orr r9,r9,r1
+	stmia r0!,{r2-r9}
+	subs r10,r10,#32
+	bgt orloop
+
+	ldmfd r13!,{r4-r10,pc}^
+
+
+	EXPORT blinds
+; there is no good reason for this routine to be here.
+blinds
+	stmfd r13!,{r4-r12,r14}
+; params r0 - screen base
+;        r1 - sprite base
+	mov r5,r0
+	mov r6,r1
+	mov r2,#0
+blinds_loop0
+	stmfd r13!,{r0-r2}
+	mov r0,#19
+	swi OS_Byte
+	ldmfd r13!,{r0-r2}
+	mov r7,r2,asl #8
+	add r7,r7,r2,asl #6
+	add r8,r5,r7
+	add r9,r6,r7
+	mov r10,#7
+blinds_loop1
+	mov r0,r8
+	mov r1,r9
+	mov r4,#80
+blinds_loop2
+	ldr r3,[r1],#4
+	str r3,[r0],#4
+	subs r4,r4,#1
+	bgt blinds_loop2
+	add r8,r8,#10240
+	add r9,r9,#10240
+	subs r10,r10,#1
+	bge blinds_loop1
+	add r2,r2,#1
+	cmp r2,#32
+	bne blinds_loop0
+	ldmfd r13!,{r4-r12,pc}^
+
+
+	EXPORT scroller
+; no good excuse for this routine being here either
+scroller
+; r0 - displayed screen
+; r1 - other bank
+; r2 - start row to copy
+; r3 - number of rows to scroll
+	stmfd r13!,{r4-r10,r14}
+
+	add r4,r1,r2,lsl #8
+	add r4,r4,r2,lsl #6
+	add r6,r0,r3,lsl #8
+	add r6,r6,r3,lsl #6
+	rsb r5,r3,#255
+	mov r7,r5,lsl #8
+	add r5,r7,r5,lsl #6
+shuffle
+	ldmia r6!,{r7-r10}
+	subs r5,r5,#16
+	stmia r0!,{r7-r10}
+	bgt shuffle
+
+	mov r7,r3,lsl #8
+	add r2,r7,r3,lsl #6
+copy
+	ldmia r4!,{r7-r10}
+	subs r2,r2,#16
+	stmia r0!,{r7-r10}
+	bgt copy
+
+	ldmfd r13!,{r4-r10,pc}^
+
+
+	END
+

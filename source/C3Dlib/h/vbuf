@@ -1,0 +1,53 @@
+/*
+**    Name: vbuf.h
+**
+**    Date: Wed Sep 23 14:57:08 1998
+**
+*/
+
+#ifndef C3D_VBUF_H
+#define C3D_VBUF_H 1
+
+#include "primitive.h"
+#include "bucket.h"
+
+typedef struct {
+  int type;          // 0 - direct   1 - sprite
+  union
+  {
+    // XBitMap* whatever;  for X port?
+//    sprite_area sprite;  for writing into sprites
+    int* pixmap;
+    int* screenbase;
+  } buffer;
+  struct {
+    point global;
+    int ambient;
+    rgbcol fadecol;
+  } light;
+  int bank, numbanks, banksize, bitdepth;
+  point2d size;
+  point pos;
+  matrix orient;
+  bpolygon* polygonbuf;
+  blist* listbuf;
+  decor* dec;
+  int refreshcounter;
+} vbufinfo;
+
+/* Auto */
+
+extern vbufinfo* c3d_newvbuf(int type, int x, int y, int bitdepth, int banks)
+;
+extern void c3d_freevbuf(vbufinfo* buf)
+;
+extern void c3d_startframe(vbufinfo* buf)
+;
+extern void c3d_endframe(vbufinfo* buf)
+;
+extern void c3d_displayframe(vbufinfo* buf)
+;
+extern void c3d_addpoly(vbufinfo* buf, polygon* p, point* r, point* l)
+;
+
+#endif

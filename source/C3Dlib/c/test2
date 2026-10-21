@@ -1,0 +1,104 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "swis.h"
+
+#include "c3d.h"
+
+extern vbufinfo* vbuf_hack;
+
+int main(void)
+{
+  vbufinfo* vbuf;
+  polygon poly;
+  textureinfo textures;
+  int i, corner=0;
+  int r=128, g=128, b=128, rs=8, gs=8, bs=8;
+
+  for (i=0; i<4; i++)
+    poly.pt[i] = c_new(upoint);
+
+  poly.pt[0]->transformed.x = 30;
+  poly.pt[0]->transformed.y = 30;
+  poly.pt[0]->transformed.z = 0;
+  poly.tex[0].x = 0;
+  poly.tex[0].y = 0;
+
+  poly.pt[1]->transformed.x = 150;
+  poly.pt[1]->transformed.y = 30;
+  poly.pt[1]->transformed.z = 85;
+  poly.tex[1].x = 32*256;
+  poly.tex[1].y = 0;
+
+  poly.pt[2]->transformed.x = 200;
+  poly.pt[2]->transformed.y = 230;
+  poly.pt[2]->transformed.z = 170;
+  poly.tex[2].x = 32*256;
+  poly.tex[2].y = 32*256;
+
+  poly.pt[3]->transformed.x = 40;
+  poly.pt[3]->transformed.y = 250;
+  poly.pt[3]->transformed.z = 255;
+  poly.tex[3].x = 0;
+  poly.tex[3].y = 32*256;
+
+  poly.edges = 4;
+  poly.texture = 0;
+  textures.data = malloc(32*32*sizeof(int));
+  textures.size.x = textures.size.y = 32;
+
+  for (i=0; i<1024; i++) textures.data[i] = rand();
+
+  c3d_initialise("C3Dlib:resources.");
+  vbuf = c3d_newvbuf(0, 320, 256, 24, 1);
+  vbuf_hack = vbuf;
+
+  while (1)
+  {
+    int buttons, i;
+
+    vbuf->light.fadecol.r = (unsigned char)r;
+    vbuf->light.fadecol.g = (unsigned char)g;
+    vbuf->light.fadecol.b = (unsigned char)b;
+    r+=rs;
+    g+=gs;
+    b+=bs;
+    if (r>255) r=255, rs=-(rand()&15)-1;
+    if (r<0) r=0, rs=(rand()&15)+1;
+    if (g>255) g=255, gs=-(rand()&15)-1;
+    if (g<0) g=0, gs=(rand()&15)+1;
+    if (b>255) b=255, bs=-(rand()&15)-1;
+    if (b<0) b=0, bs=(rand()&15)+1;
+    _swi(OS_Mouse, _OUTR(0,2), &poly.pt[corner]->transformed.x,
+                               &poly.pt[corner]->transformed.y, &buttons);
+
+    if (_kernel_osbyte(129, 256-67, 255) & 0xff0000)
+      for (i=0; i<4; i++)
+        poly.pt[i]->transformed.x += 1;
+
+    if (_kernel_osbyte(129, 256-98, 255) & 0xff0000)
+      for (i=0; i<4; i++)
+        poly.pt[i]->transformed.x -= 1;
+
+    if (_kernel_osbyte(129, 256-105, 255) & 0xff0000)
+      for (i=0; i<4; i++)
+        poly.pt[i]->transformed.y += 1;
+
+    if (_kernel_osbyte(129, 256-80, 255) & 0xff0000)
+      for (i=0; i<4; i++)
+        poly.pt[i]->transformed.y -= 1;
+
+    poly.pt[corner]->transformed.x >>= 2;
+    poly.pt[corner]->transformed.y = 255-(poly.pt[corner]->transformed.y/4);
+
+    if (buttons>0)
+    {
+      while (buttons>0) _swi(OS_Mouse, _OUT(2), &buttons);
+      corner = (corner+1) & 3;
+    }
+
+    texture2(vbuf, &poly, &textures);
+  }
+
+  return 0;
+}

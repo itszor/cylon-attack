@@ -1,0 +1,460 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+#include <ctype.h>
+#include "swis.h"
+
+#include "game.h"
+#include "allocv.h"
+#include "enemy.h"
+#include "scale.h"
+#include "rectangle.h"
+#include "smoothpoint.h"
+
+gameinfo* newgame(void)
+{
+  gameinfo* game = c_new(gameinfo);
+  int i;
+
+  game->scene = newscene();
+
+  resetgame(game);
+/*
+  for (i=0; i<16; i++)
+  {
+    c3d_list_add(&game->enemies);
+    game->enemies->data = (void*) newenemy((enemytype)rand()&3);
+  }
+
+*/
+
+  for (i=0; i<ENEMYTYPES; i++)
+  {
+    game->enemyshield[i] = 0;
+    switch (i)
+    {
+      case enemytype_SKULL:
+      case enemytype_FIGHTER:
+      case enemytype_SNAKE:   // some redundancy here
+      case enemytype_SNAKE_A:
+      case enemytype_SAUCER:
+      case enemytype_SHELL:
+      {
+        game->enemyctrl[i][enemymode_IDLE] = default_idle;
+        game->enemyctrl[i][enemymode_APPROACH] = default_approach;
+        game->enemyctrl[i][enemymode_RETREAT] = default_retreat;
+      }
+      break;
+
+      case enemytype_MOTHERSHIP:
+      {
+        game->enemyctrl[i][enemymode_IDLE] = mothership_idle;
+        game->enemyctrl[i][enemymode_APPROACH] = 0;
+        game->enemyctrl[i][enemymode_ATTACK] = 0;
+        game->enemyctrl[i][enemymode_RETREAT] = 0;
+      }
+      break;
+
+      case enemytype_BOMB1:
+      case enemytype_BOMB2:
+      case enemytype_POWERUP:
+      {
+        game->enemyctrl[i][enemymode_IDLE] = bomb_idle;
+        game->enemyctrl[i][enemymode_APPROACH] = 0;
+        game->enemyctrl[i][enemymode_ATTACK] = 0;
+        game->enemyctrl[i][enemymode_RETREAT] = 0;
+      }
+      break;
+
+      case enemytype_EXPLOSION:
+      {
+        game->enemyctrl[i][enemymode_IDLE] = explosion_idle;
+        game->enemyctrl[i][enemymode_APPROACH] = 0;
+        game->enemyctrl[i][enemymode_ATTACK] = 0;
+        game->enemyctrl[i][enemymode_RETREAT] = 0;
+      }
+      break;
+    }
+  }
+
+  game->enemyctrl[enemytype_POWERUP][enemymode_IDLE] = powerup_idle;
+  game->enemyctrl[enemytype_SNAKE][enemymode_IDLE] = snake_idle;
+  game->enemyctrl[enemytype_SNAKE_A][enemymode_APPROACH] = snake_approach;
+
+  game->enemyctrl[enemytype_SKULL][enemymode_ATTACK] = skullfighter_attack;
+  game->enemyctrl[enemytype_FIGHTER][enemymode_ATTACK] = skullfighter_attack;
+  game->enemyctrl[enemytype_SAUCER][enemymode_ATTACK] = saucer_attack;
+  game->enemyctrl[enemytype_SHELL][enemymode_ATTACK] = shell_attack;
+  game->enemyctrl[enemytype_SNAKE][enemymode_ATTACK] = 0;
+  game->enemyctrl[enemytype_SNAKE_A][enemymode_ATTACK] = snake_attack;
+
+  for (i=0; i<24; i++)
+  {
+    game->hiscores[i].score = 0;
+    strncpy(game->hiscores[i].initials, "JTB", 3);
+  }
+
+  return game;
+}
+
+void resetgame(gameinfo* game)
+{
+  game->lives = 3;
+  game->fuelcells = 3;
+  game->fuel = 65535;
+  game->shield = 65535;
+  game->msshield = 65535;
+  game->laser = 65535;
+  game->lasertype = 0;
+  game->pos.x = game->pos.y = 0;
+  game->speed.x = game->speed.y = 0;
+  game->amp.x = game->amp.y = 0;
+  game->phase.x = game->phase.y = 0;
+  game->state = gamestate_LAUNCH;
+  game->explostate = 0;
+  game->powerup = powerup_NONE;
+  game->poweruptimer = 0;
+  game->fuse1 = 200;
+  game->fuse2 = 150;
+  game->level = 0;
+  game->ticker = 0;
+  game->enemies = 0;
+  game->score = 0;
+  game->flashmessage = "NO MESSAGE";
+  game->messagetimer = 0;
+}
+
+void plotxhair(gameinfo* game, int count)
+{
+  point2d pos = {136,112};
+  point2d centre = {2560,2048};
+  const point2d xhairsize = {48,32};
+  int n=0;
+  list* e;
+
+  if (count)
+  {
+    for (e=game->enemies; e; e=e->prev)
+      if (intersect(game, (enemyinfo*)e->data, &centre)) n++;
+
+    if (n>3) n=3;
+  }
+
+  // plot crosshair
+  m_XxY(game->scene->buffer, &game->scene->bitmaps.xhair[n*48*32/4], &pos, &xhairsize);
+}
+
+void plotstuff(gameinfo* game)
+{
+  int i;
+
+  // count intersections
+/*  switch (game->state)
+  {
+    case gamestate_FINALAPPROACH:
+    case gamestate_LAUNCH:
+    case gamestate_REFUELDOCK:
+    case gamestate_REFUELLAUNCH:
+    break;
+
+    default:
+  }*/
+
+  // plot fuel cells
+  for (i=0; i<(game->fuelcells<4 ? game->fuelcells : 4); i++)
+  {
+    point2d at = {304, 8};
+    at.x -= i*12;
+    m_XxY(game->scene->buffer, game->scene->bitmaps.misc[0], &at, &MISCSIZES[0]);
+  }
+
+  plotmap(game);
+  plotbars(game);
+
+  if ((game->messagetimer&15)>5)
+    plottext(game, -1, 85, game->flashmessage);
+}
+
+void plotlaser(gameinfo* game)
+{
+  // render shots
+  if (game->state == gamestate_FIRING)
+  {
+    int param = (1<<24)/game->shotdepth;
+    int centre = param/16;
+    int* shotbits = &game->scene->bitmaps.bomb[game->lasertype*32*16/4];
+    point2d pos, pos2;
+
+    toscreen(game->scene, &pos2, &game->shotpos);
+    pos2.x >>= 4;
+    pos2.y >>= 4;
+    param = 316-param;
+    pos.x = 0+(((pos2.x-0)*param)>>8)-centre;
+    pos.y = 224+(((pos2.y-224)*param)>>8)-(centre>>1);
+    sm_32x16(game->scene->buffer, shotbits, &pos, game->shotdepth);
+    pos.x = 320+(((pos2.x-320)*param)>>8)-centre;
+    pos.y = 224+(((pos2.y-224)*param)>>8)-(centre>>1);
+    sm_32x16(game->scene->buffer, shotbits, &pos, game->shotdepth);
+  }
+}
+
+// returns the number of...
+int properenemies(list* enemies)
+{
+  int c=0;
+
+  for (; enemies; enemies=enemies->prev)
+  {
+    enemyinfo* enemy = (enemyinfo*) enemies->data;
+
+    if (enemy->type < enemytype_MOTHERSHIP) c++;
+  }
+
+  return c;
+}
+
+void plotmap(gameinfo* game)
+{
+  const point2d pos={160-32,8}, cpos={160-10,32-8};
+  const point2d size={64,48}, csize={20,16};
+  list* e;
+
+//  rectangle(game->scene->buffer, 0, &pos, &size);
+//  shadedrect(game->scene->buffer, &pos, &size, 255|(50<<8));
+
+  for (e=game->enemies; e; e=e->prev)
+  {
+    enemyinfo* enemy = (enemyinfo*) e->data;
+    int x,y;
+    if (enemy->type < enemytype_BOMB1)
+    {
+      x=160+((((game->scene->offset.x+enemy->pos.x)&32767)-16384)>>9);
+      y=32+((((game->scene->offset.y+enemy->pos.y)&32767)-16384)>>9);
+      if (x>=pos.x && x<(pos.x+size.x-1) && y>=pos.y && y<(pos.y+size.y-1))
+      {
+        const int yellow=118, white=255, blue=138;
+        blob(game->scene->buffer, x, y, enemy->type == enemytype_MOTHERSHIP ? yellow
+                                      : enemy->type == enemytype_POWERUP ? blue : white);
+      }
+    }
+  }
+
+  shadedrect(game->scene->buffer, &cpos, &csize, 45|(45<<8));
+
+  if (!properenemies(game->enemies) && (game->ticker&255)>50)
+  {
+    const point2d pos={110,200};
+    m_XxY(game->scene->buffer, game->scene->bitmaps.message[0], &pos, &MESSAGESIZES[0]);
+  }
+
+  if (game->fuel < 13107 && (game->ticker&127)>64)
+  {
+    const point2d pos={140,186};
+    m_XxY(game->scene->buffer, game->scene->bitmaps.message[1], &pos, &MESSAGESIZES[1]);
+  }
+
+  if (game->shield <= 16384 && (game->ticker&127)<=64)
+  {
+    const point2d pos={134,186};
+    m_XxY(game->scene->buffer, game->scene->bitmaps.message[2], &pos, &MESSAGESIZES[2]);
+  }
+}
+
+void plotbars(gameinfo* game)
+{
+  const point2d fuelpos = {8, 245};
+  const point2d shieldpos = {88, 245};
+  const point2d msshieldpos = {204, 8};
+  const point2d laserpos = {248, 245};
+  const point2d xtilt = {1, 5}, ytilt = {5, 1};
+  point2d barfull, tpos;
+  point2d tilt;
+
+  barfull.y = 6;
+  barfull.x = (game->shield >> 10);
+  rectangle(game->scene->buffer, 0x67676767, &shieldpos, &barfull);
+  barfull.x = (game->fuel >> 10);
+  rectangle(game->scene->buffer, 0x67676767, &fuelpos, &barfull);
+  barfull.x = (game->laser >> 10);
+  rectangle(game->scene->buffer, 0x67676767, &laserpos, &barfull);
+  barfull.x = (game->msshield >> 10);
+  rectangle(game->scene->buffer, 0x67676767, &msshieldpos, &barfull);
+
+  tilt.x = -(game->speed.x>>4);
+  tilt.y = -(game->speed.y>>4);
+  tilt.x = tilt.x<-10 ? -10 : tilt.x>10 ? 10 : tilt.x;
+  tilt.y = tilt.y<-10 ? -10 : tilt.y>10 ? 10 : tilt.y;
+  tpos.x = 226;
+  tpos.y = 242+tilt.y;
+  shadedrect(game->scene->buffer, &tpos, &ytilt, 255|(63<<8));
+  tpos.x = 207+tilt.x;
+  tpos.y = 245;
+  shadedrect(game->scene->buffer, &tpos, &xtilt, 255|(63<<8));
+
+/*  shadedrect(game->scene->buffer, &shieldpos, &barsize, 255|(50<<8));
+  shadedrect(game->scene->buffer, &fuelpos, &barsize, 255|(50<<8));
+  shadedrect(game->scene->buffer, &laserpos, &barsize, 255|(50<<8));*/
+}
+
+void plotscore(gameinfo* game)
+{
+  char digits[11];
+  int i;
+  point2d pos={4,2}, dsize={16,24};
+  const int size=24*16/4;
+
+  sprintf(digits, "%06d0", game->score);
+  for (i=0; i<7; i++)
+  {
+    m_XxY(game->scene->buffer, &game->scene->bitmaps.digit[size*(((int)digits[i])-'0')],
+          &pos, &dsize);
+    pos.x += 16;
+  }
+}
+
+void plottext(gameinfo* game, int x, int y, char* format, ...)
+{
+  char buf[80];
+  va_list v;
+  int i;
+  const int size=24*16/4;
+  point2d pos, dsize={16,24};
+
+  va_start(v, format);
+  vsprintf(buf, format, v);
+  va_end(v);
+
+  if (x>=0) pos.x=x; else pos.x=164-8*strlen(buf);
+  pos.y=y;
+
+  for (i=0; buf[i]; pos.x+=16, i++)
+  {
+    int* bitmap;
+    if (isupper(buf[i])) bitmap = &game->scene->bitmaps.letter[size*(((int)buf[i])-'A')];
+    else if (isdigit(buf[i])) bitmap = &game->scene->bitmaps.digit[size*(((int)buf[i])-'0')];
+    else continue;
+    m_XxY(game->scene->buffer, bitmap, &pos, &dsize);
+  }
+}
+
+void controls(gameinfo* game)
+{
+  int spdlim = (game->powerup==powerup_DOUBLESPEED) ? 256 : 192;
+  point2d spd = game->speed;
+  int leftkey = (game->powerup==powerup_REVERSEKEYS) ? -98 : -67;
+  int rightkey = (game->powerup==powerup_REVERSEKEYS) ? -67 : -98;
+  int upkey = (game->powerup==powerup_REVERSEKEYS) ? -105 : -80;
+  int downkey = (game->powerup==powerup_REVERSEKEYS) ? -80 : -105;
+  int lrkeydown=0, udkeydown=0;
+
+  if (c3d_keydown(leftkey) && spd.x>-spdlim) {
+    if (spd.x>0) spd.x=0; else spd.x-=2;
+    lrkeydown=1;
+  }
+
+  if (c3d_keydown(rightkey) && spd.x<spdlim) {
+    if (spd.x<0) spd.x=0; else spd.x+=2;
+    lrkeydown=1;
+  }
+
+  if (!lrkeydown) {
+    spd.x += spd.x<0 ? 2 : spd.x>0 ? -2 : 0;
+  }
+
+  if (c3d_keydown(downkey) && spd.y>-spdlim) {
+    if (spd.y>0) spd.y=0; else spd.y-=2;
+    udkeydown=1;
+  }
+
+  if (c3d_keydown(upkey) && spd.y<spdlim) {
+    if (spd.y<0) spd.y=0; else spd.y+=2;
+    udkeydown=1;
+  }
+
+  if (!udkeydown) {
+    spd.y += spd.y<0 ? 2 : spd.y>0 ? -2 : 0;
+  }
+
+  if (c3d_keydown(-99))
+  {
+    if (game->state == gamestate_IDLE && game->laser > 8192)
+    {
+      game->state = gamestate_FIRING;
+      game->shotpos.x = (16384-game->scene->offset.x)&32767;
+      game->shotpos.y = (16384-game->scene->offset.y)&32767;
+      game->shotdepth = 49152;
+      game->laser -= 8192;
+//      game->lasertype = 1-game->lasertype;
+      flexisound_play(game->sound.laser, 2, 0x17f, 0x2000);
+    }
+  }
+
+// would you like to cheat, sir?
+/*  if (c3d_keydown(-49)) {
+    game->powerup = powerup_INVINCIBLE;
+    message(game, "INVINCIBLE");
+  }
+  if (c3d_keydown(-50)) {
+    game->powerup = powerup_REVERSEKEYS;
+    message(game, "REVERSE CONTROLS");
+  }
+  if (c3d_keydown(-18)) {
+    game->powerup = powerup_DOUBLESPEED;
+    message(game, "SPIN BOOSTER");
+  }
+  if (c3d_keydown(-19)) {
+    game->powerup = powerup_JELLY;
+    message(game, "JELLY CONTROLS");
+  }*/
+
+  // This effect is horrible. It makes me feel sick.
+  if (game->powerup==powerup_JELLY)
+  {
+    if (lrkeydown)
+    {
+      if (game->amp.x<256) game->amp.x++;
+    }
+    else
+    {
+      if (game->amp.x>0) game->amp.x--;
+    }
+    if (udkeydown)
+    {
+      if (game->amp.y<256) game->amp.y++;
+    }
+    else
+    {
+      if (game->amp.y>0) game->amp.y--;
+    }
+    game->phase.x += 640;
+    game->phase.y += 500;
+  }
+
+  game->speed = spd;
+}
+
+void message(gameinfo* game, char* text)
+{
+  game->flashmessage = text;
+  game->messagetimer = 100;
+}

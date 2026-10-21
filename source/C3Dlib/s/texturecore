@@ -1,0 +1,366 @@
+	; core of texture-mapper
+
+	; new entry params   r0 = input
+	;		     r1 = base of sprites
+	;		     r2 = sprite number
+	;		     r3 = log2 width of texture
+
+	; format of workspace is (list of)
+	; 0  = (int) ytop    - top of segment
+	; 4  = (int) height  - vertical height of segment
+	; 8  = (fix) xstart  - horizontal start position of segment
+	; 12 = (fix) xdelta  - amount to change above by each scan line
+	; 16 = (fix) sx	     - horizontal position on texture
+	; 20 = (fix) sy	     - vertical position on texture
+	; 24 = (fix) depth   - depth of coordinate (for depth cueing)
+	; 28 = (fix) sxd     - amount to change sx by each scan line
+	; 32 = (fix) syd     - amount to change sy by each scan line
+	; 36 = (fix) depthd  - amount to change depth by on each scan line
+
+	stmfd r13!,{r4-r12,r14}
+
+	adrl r4,texturewidth
+	str r3,[r4]
+
+	mov r3,r3,lsl #1		; multiply log2 of width by 2
+	add r3,r1,r2,lsl r3		; lsl r3 is square of width - textures are all square, OK?
+
+	adrl r2,c3d_workspace
+;	adrl r1,static_vertices
+	add r1,r0,#32			; 4*4*2
+
+	add r4,r2,#4*PLENGTH		; end of used workspace
+
+	mov r5,#3
+	mov r10,r2			; index into workspace
+point_to_segment
+	add r6,r5,#1
+	and r6,r6,#3			; r6=(r5+1)MOD4
+
+	add r8,r0,r6,asl #3
+	add r7,r0,r5,asl #3
+	ldmia r8,{r9,r12}		; x1, y1
+	ldmia r7,{r7,r8}		; x0, y0
+
+	cmp r8,r12
+	ble p_to_s_noswap
+	str r7, [r4,#MX1]		; reverse order
+	str r8, [r4,#MY1]
+;	str r9, [r4,#MX0]
+;	str r12,[r4,#MY0]
+	stmia r4,{r9,r12}		; same thing
+	add r9,r0,#64			; this'll do for now
+	ldr r12,[r9,r6,asl #2]
+	str r12,[r4,#MD0]
+	ldr r12,[r9,r5,asl #2]
+	str r12,[r4,#MD1]
+	; texture coordinates
+	add r8,r1,r6,asl #3		; should eventually be changed to non-static input
+	add r7,r1,r5,asl #3
+;	add r8,r8,#32  ...instead?
+;	add r7,r7,#32
+	ldmia r8,{r9,r12}		; get tx1,ty1
+	str r9, [r4,#MTX0]
+	str r12,[r4,#MTY0]
+	ldmia r7,{r9,r12}		; get tx0,ty0
+	str r9, [r4,#MTX1]
+	str r12,[r4,#MTY1]
+	b finishswap
+p_to_s_noswap
+;	str r7, [r4,#MX0]		; keep order
+;	str r8, [r4,#MY0]
+;	str r9, [r4,#MX1]
+;	str r12,[r4,#MY1]
+	stmia r4,{r7,r8,r9,r12}		; equivalent
+	add r9,r0,#64			; this'll do for now
+	ldr r12,[r9,r5,asl #2]
+	str r12,[r4,#MD0]
+	ldr r12,[r9,r6,asl #2]
+	str r12,[r4,#MD1]
+	; texture coordinates
+	add r7,r1,r5,asl #3
+	add r8,r1,r6,asl #3
+	ldmia r7,{r9,r12}		; get tx0,ty0
+	str r9, [r4,#MTX0]
+	str r12,[r4,#MTY0]
+	ldmia r8,{r9,r12}		; get tx1,ty1
+	str r9, [r4,#MTX1]
+	str r12,[r4,#MTY1]
+finishswap
+
+;	add r7,r0,r5,asl #3		; recalculate previous r7, r8
+;	add r8,r0,r6,asl #3		; should be faster than ld#.
+; don't need to do that in the brand new scheme of things
+
+	ldr r9,[r4,#MY0]		; ytop
+	ldr r11,[r4,#MY1]		; ybottom
+	subs r11,r11,r9			; height       r11 is height!!!
+
+	str r9,[r10,#TOP]		; store top position (always assumes zeroth edge is @ top)
+	str r11,[r10,#HEIGHT]		; store zero height
+	beq skiphoriz
+
+	ldr r8,[r4,#MX0]		; xstart
+	mov r12,r8,asl #16
+;	stmia r10,{r9,r11,r12}		; equiv. 3 strs  (top, height, xstart)
+	str r12,[r10,#XSTART]		; does others above now.
+
+	ldr r9,[r4,#MX1]		; xend
+	sub r9,r9,r8			; integer-sized line length/bytes
+
+	adrl r8,c3d_divtab
+	cmp r11,#2992
+	ldmgefd r13!,{r4-r12,pc}	; ...exiting from routine
+	ldr r11,[r8,r11,asl #2]		; div table lookup - r11 is height
+	mul r12,r9,r11			; r11 used here
+	str r12,[r10,#XDELTA]		; xdelta
+
+	; r11 is multiplier to fit x-width (ie 1/x-width)
+
+	; the following stuff is for texture mapping
+
+;	add r7,r1,r5,asl #3
+;	add r8,r1,r6,asl #3
+
+	ldr r9,[r4,#MTX0]		; sx0
+	ldr r12,[r4,#MTX1]		; sx1
+	sub r12,r12,r9
+	mov r9,r9,asl #8		; grrr... chomp chomp phut phut arghhh
+	str r9,[r10,#SX]		; store sx
+	mul r9,r12,r11
+	mov r9,r9,asr #8		; only shift down by amount inherent in texture coords
+	str r9,[r10,#SXD]		; sxd
+
+	ldr r9,[r4,#MTY0]		; sy0
+	ldr r12,[r4,#MTY1]		; sy1
+	sub r12,r12,r9
+	mov r9,r9,asl #8
+	str r9,[r10,#SY]		; store sy
+	mul r9,r12,r11
+	mov r9,r9,asr #8
+	str r9,[r10,#SYD]		; syd
+
+	IF shade=1
+	; ok, new stuff. Find delta for depth cue
+	ldr r9,[r4,#MD0]		; sy0
+	ldr r12,[r4,#MD1]		; sy1
+	sub r12,r12,r9
+	mov r9,r9,asl #8
+	str r9,[r10,#DEPTH]		; store sy
+	mul r9,r12,r11
+	mov r9,r9,asr #8
+	str r9,[r10,#DEPTHD]		; syd
+	ENDIF
+
+skiphoriz
+	add r10,r10,#PLENGTH		; next segment
+
+	subs r5,r5,#1
+	bge point_to_segment
+
+	; sort segments top-to-bottom
+
+	compare_swap 0,1
+	compare_swap 0,2
+	compare_swap 0,3
+	compare_swap 1,2
+	compare_swap 1,3
+	compare_swap 2,3
+
+	adrl r4,c3d_screenbase
+	ldr r4,[r4]
+
+	ldr r14,[r2]			; ytrace = ytop(0)
+
+	add r4,r4,r14,asl #shift_1
+	add r4,r4,r14,asl #shift_2
+
+	mov r0,#0
+find_nonhoriz_segment_0
+	add r5,r2,r0,lsl #SLENGTH
+	ldr r7,[r5,#HEIGHT]		; check validity of seg0
+	cmp r0,#4
+	ldmgefd r13!,{r4-r12,pc}	; drop out if all four edges horizontal
+	cmp r7,#0
+	add r0,r0,#1
+	beq find_nonhoriz_segment_0
+
+	; if one non-horizontal edge has been found, there must be another
+find_nonhoriz_segment_1
+	add r6,r2,r0,lsl #SLENGTH
+	ldr r7,[r6,#HEIGHT]	     ; check validity of seg1
+	cmp r7,#0
+	add r0,r0,#1
+	beq find_nonhoriz_segment_1
+
+	; ******* plot that polygon! *******
+
+repeat_loop
+	ldr r7,[r5,#XSTART]		; xstart(active0)
+	ldr r8,[r6,#XSTART]		; xstart(active1)
+
+	stmfd r13!,{r5,r6}
+
+	cmp r7,r8
+	ble no_swap_line_direction
+	swap r7,r8		; xstart <-> xend
+	add r9,r6,#SX
+	ldmia r9,{r9,r10}	; sx(active1), sy(active1)
+	add r11,r5,#SX
+	ldmia r11,{r11,r12}	; sx(active0), sy(active0)
+	IF shade=1
+	ldr r1,[r6,#DEPTH]	; replace r5 & r6 with depth
+	ldr r6,[r5,#DEPTH]
+	mov r5,r1		; swapped r5 & r6
+	ENDIF
+	b end_swap
+no_swap_line_direction
+	add r9,r5,#SX
+	ldmia r9,{r9,r10}	; sx(active0), sy(active0)
+	add r11,r6,#SX
+	ldmia r11,{r11,r12}	; sx(active1), sy(active1)
+	IF shade=1
+	ldr r5,[r5,#DEPTH]	; replace r5 & r6 with depth
+	ldr r6,[r6,#DEPTH]
+	ENDIF
+end_swap
+
+	mov r7,r7,asr #16	; bizarre instruction order? - r7 needed later
+	rsb r8,r7,r8,asr #16	; r8 is line-length
+
+	sub r11,r11,r9		; texture-x
+	sub r12,r12,r10		; texture-y
+	IF shade=1
+	sub r6,r6,r5		; depth
+	ENDIF
+
+	stmfd r13!,{r0}
+
+	adrl r0,c3d_divtab
+	ldr r1,[r0,r8,asl #2]
+	mov r11,r11,asr #5
+	mov r12,r12,asr #5
+	mul r12,r1,r12
+	mul r11,r1,r11
+	mov r11,r11,asr #11
+	mov r12,r12,asr #11
+	IF shade=1
+	mov r6,r6,asr #5
+	mul r6,r1,r6
+	mov r6,r6,asr #11
+	ENDIF
+
+	; clip to right of screen
+	mov r1,#320
+	sub r1,r1,#1		; ie mov r1,#319
+	add r0,r7,r8
+	cmp r0,r1
+	rsbge r8,r7,r1		; bound-check rhs
+	cmp r8,#0
+	blt skip_fill
+
+	; clip to left of screen
+	cmp r7,#0
+	bge no_clip_left
+	rsb r0,r7,#0		; r0=number of clipped pixels
+	subs r8,r8,r0
+	blt skip_fill		; drop out if neg length
+	mov r7,#0
+	IF shade=1
+	mla r5,r6,r0,r5		; depth - haven't thought much about this
+	ENDIF
+	mla r9,r11,r0,r9	; compensate missed bytes in texture things
+	mla r10,r12,r0,r10	; I'm quite pleased with this bit (it works)
+no_clip_left
+
+	; clip to top
+	cmp r14,#0		; this may be better done using a method of hacking
+	blt skip_fill		; about with the segment data before the main loop.
+
+	; clip to bottom
+	cmp r14,#size_y
+	bge quit_2
+
+	add r7,r4,r7		; r7 is address of line start
+
+	; r0,r4,r5,r6 free for gourauded texture fx!!!
+	stmfd r13!,{r2,r4,r14}
+
+	adrl r14,texturewidth
+	ldr r14,[r14]		; I hate this crap code wot I wrote there
+
+	adrl r0,c3d_fogclut		; get the shades
+	ldr r0,[r0]		; load pointer
+
+	FILLER
+
+	ldmfd r13!,{r2,r4,r14}
+
+skip_fill
+
+	ldmfd r13!,{r0}		; restore r0, next edge index
+	ldmfd r13!,{r5,r6}
+
+	; update texture-map variables
+	add r11,r5,#SX
+	ldmia r11,{r1,r7,r8,r9,r10,r12}
+	add r1,r1,r9
+	add r7,r7,r10
+	add r8,r8,r12
+	stmia r11,{r1,r7,r8}
+
+	; update more texture-map variables
+	add r11,r6,#SX
+	ldmia r11,{r1,r7,r8,r9,r10,r12}
+	add r1,r1,r9
+	add r7,r7,r10
+	add r8,r8,r12
+	stmia r11,{r1,r7,r8}
+
+	; do xstart(active0)+=xdelta(active0)
+;	add r10,r5,#4
+	ldmib r5,{r7,r8,r9}	; height, xstart, xdelta
+	add r8,r8,r9
+	subs r7,r7,#1		; *** affect flags
+	stmib r5,{r7,r8}	; only store back height, xstart
+	bgt no_segment_overwrite_0
+segment_rewrite_0
+	cmp r0,#4
+	ldmeqfd r13!,{r4-r12,pc}
+	add r5,r2,r0,lsl #SLENGTH
+	add r0,r0,#1
+	ldr r10,[r5,#HEIGHT]	; check if height of segment is zero
+	cmp r10,#0
+	beq segment_rewrite_0	; if so get next/quit instead
+no_segment_overwrite_0
+
+	; do xstart(active1)+=xdelta(active1)
+;	add r10,r6,#4
+	ldmib r6,{r7,r8,r9}	; height, xstart, xdelta
+	add r8,r8,r9
+	subs r7,r7,#1		; *** affect flags
+	stmib r6,{r7,r8}	; only store back height, xstart
+	bgt no_segment_overwrite_1
+segment_rewrite_1
+	cmp r0,#4
+	ldmeqfd r13!,{r4-r12,pc}
+	add r6,r2,r0,lsl #SLENGTH
+	add r0,r0,#1
+	ldr r10,[r6,#4]		; check if height of segment is zero
+	cmp r10,#0
+	beq segment_rewrite_1	; if so get next/quit instead
+no_segment_overwrite_1
+
+	add r4,r4,#size_x	; change this (presumably) for different screen widths
+	add r14,r14,#1
+	b repeat_loop
+
+	ldmfd r13!,{r4-r12,pc}	; the code never reaches here
+
+quit_2
+;	ldmfd r13!,{r0,r1,r2}
+	add r13,r13,#12
+	ldmfd r13!,{r4-r12,pc}
+
+
+	END

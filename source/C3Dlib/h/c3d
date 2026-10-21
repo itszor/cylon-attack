@@ -1,0 +1,28 @@
+/*
+**    Name: c3d.h
+**
+**    Date: Thu Sep 24 14:11:33 1998
+**
+*/
+#ifndef C3D_C3D_H
+#define C3D_C3D_H 1
+
+#include "C3Dlib:allocv.h"
+#include "C3Dlib:primitive.h"
+#include "C3Dlib:vbuf.h"
+#include "C3Dlib:bucket.h"
+#include "C3Dlib:filing.h"
+#include "C3Dlib:intmath.h"
+#include "C3Dlib:list.h"
+#include "C3Dlib:object.h"
+#include "C3Dlib:plotter.h"
+#include "C3Dlib:utils.h"
+#include "C3Dlib:transform.h"
+#include "C3Dlib:texture2.h"
+
+extern decor* c3d_gfxdata;
+
+void c3d_initialise(char* datapath);
+void c3d_closedown(void);
+
+#endif

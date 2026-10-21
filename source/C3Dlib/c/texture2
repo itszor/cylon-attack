@@ -1,0 +1,202 @@
+
+#include "primitive.h"
+#include "texture2.h"
+#include "vbuf.h"
+
+vbufinfo* vbuf_hack;
+
+void texture2glue(coords* in, int* tex, int num, int width)
+{
+  upoint pt[4];
+  polygon p;
+  int i;
+  textureinfo tinf;
+
+  tinf.size.x = tinf.size.y = width*4;
+  tinf.data = tex;
+
+  for (i=0; i<4; i++)
+  {
+    p.pt[i] = &pt[i];
+    pt[i].transformed.x = in->input[i].x;
+    pt[i].transformed.y = in->input[i].y;
+    pt[i].transformed.z = 255-(in->depth[i]>>4);
+    if (pt[i].transformed.z<0) pt[i].transformed.z = 0;
+    if (pt[i].transformed.z>255) pt[i].transformed.z = 255;
+    p.tex[i] = in->tc[i];
+  }
+  p.texture = num;
+  p.edges = 4;
+  texture2(vbuf_hack, &p, &tinf);
+}
+
+/*
+ * Plot a textured, shaded polygon.
+ * Only 3- or 4-sided polygons are going to work without crashing horribly.
+ */
+
+void texture2(vbufinfo* vbuf, polygon* p, textureinfo* tex)
+{
+  edge e[4];
+  edge *active[2];
+  int es = 0, i, lines, next, y;
+  int* bitmap = &tex->data[tex->size.x*tex->size.y*p->texture];
+  int fr = vbuf->light.fadecol.r, fg = vbuf->light.fadecol.g, fb = vbuf->light.fadecol.b;
+
+  // Set up edge list
+  for (i=0; i<p->edges; i++)
+  {
+    int n = (i+1 == p->edges) ? 0 : i+1;
+    int j;
+
+    if (p->pt[i]->transformed.y < p->pt[n]->transformed.y)
+      j=i;
+    else
+      j=n, n=i;
+
+    e[es].top = p->pt[j]->transformed.y;
+    e[es].height = p->pt[n]->transformed.y - e[es].top;
+
+    if (e[es].height != 0 && e[es].top+e[es].height >= 0 && e[es].top < vbuf->size.y)
+    {
+      e[es].xstart = p->pt[j]->transformed.x << 16;
+      e[es].xdelta = ((p->pt[n]->transformed.x << 16) - e[es].xstart) / e[es].height;
+      e[es].u = p->tex[j].x << 8;
+      e[es].v = p->tex[j].y << 8;
+      e[es].lightness = 0;
+      e[es].depth = p->pt[j]->transformed.z << 16;
+      e[es].udelta = ((p->tex[n].x << 8) - e[es].u) / e[es].height;
+      e[es].vdelta = ((p->tex[n].y << 8) - e[es].v) / e[es].height;
+      e[es].lightdelta = 0;
+      e[es].depthdelta = ((p->pt[n]->transformed.z << 16) - e[es].depth) / e[es].height;
+
+      if (e[es].top < 0) // clip to top
+      {
+        int cut = -e[es].top;
+        e[es].top = 0;
+        e[es].height -= cut-1;
+        e[es].xstart += cut * e[es].xdelta;
+        e[es].u += cut * e[es].udelta;
+        e[es].v += cut * e[es].vdelta;
+        e[es].lightness += cut * e[es].lightdelta;
+        e[es].depth += cut * e[es].depthdelta;
+      }
+
+      if (e[es].top+e[es].height >= vbuf->size.y) // clip to bottom
+      {
+        e[es].height = vbuf->size.y - e[es].top - 1;
+      }
+
+      es++;
+    }
+  }
+
+  // can't plot anything with fewer than two edges
+  if (es<2) return;
+
+  // Simple-sort edges top..bottom
+  for (i=0; i<es-1; i++)
+  {
+    int j;
+    int top = e[i].top, swap = -1;
+
+    for (j=i+1; j<es; j++)
+    {
+      if (top > e[j].top)
+      {
+        top = e[j].top;
+        swap = j;
+      }
+    }
+
+    if (swap != -1)
+    {
+      edge temp = e[swap];
+      e[swap] = e[i];
+      e[i] = temp;
+    }
+  }
+
+  active[0] = &e[0];
+  active[1] = &e[1];
+  y = e[0].top;
+  next = 2;
+
+  while (next <= es)
+  {
+    int s;
+
+    // lines is lesser of two currently active edges
+    lines = active[0]->height < active[1]->height ? active[0]->height : active[1]->height;
+
+    active[0]->height -= lines;
+    active[1]->height -= lines;
+
+    do
+    {
+      int xs, xe, uspan, vspan, lspan, dspan, uspand, vspand, lspand, dspand, ls;
+      int* write;
+
+      // ls gets the value 0 or 1 for left-to-right or right-to-left
+      ls = active[0]->xstart > active[1]->xstart;
+
+      // use of ! is mainly to make the program look more complicated
+      xs = active[ls]->xstart >> 16;
+      xe = active[!ls]->xstart >> 16;
+      if (xs==xe || xe<0 || xs>=vbuf->size.x) goto zerolength;
+      uspan = active[ls]->u;
+      vspan = active[ls]->v;
+      lspan = active[ls]->lightness;
+      dspan = active[ls]->depth;
+      uspand = (active[!ls]->u - uspan) / (xe-xs);
+      vspand = (active[!ls]->v - vspan) / (xe-xs);
+      lspand = (active[!ls]->lightness - lspan) / (xe-xs);
+      dspand = (active[!ls]->depth - dspan) / (xe-xs);
+
+      if (xs < 0) // clip to left
+      {
+        int cut = -xs;
+        xs = 0;
+        uspan += cut * uspand;
+        vspan += cut * vspand;
+        lspan += cut * lspand;
+        dspan += cut * dspand;
+      }
+
+      if (xe >= vbuf->size.x) // clip to right
+      {
+        xe = vbuf->size.x - 1;
+      }
+
+      write = &vbuf->buffer.screenbase[((vbuf->bank*vbuf->banksize)>>2)+y*vbuf->size.x+xs];
+      // fill a span
+      for (; xs<xe; xs++)
+      {
+        int d = dspan >> 16;
+        int texel = bitmap[tex->size.x*(vspan >> 16)+(uspan >> 16)];
+        *write++ = (fr+((d*((texel&0xff)-fr))>>8))
+                 | ((fg+((d*(((texel&0xff00)>>8)-fg))>>8))<<8)
+                 | ((fb+((d*(((texel&0xff0000)>>16)-fb))>>8))<<16);
+        uspan += uspand;
+        vspan += vspand;
+        lspan += lspand;
+        dspan += dspand;
+      }
+
+zerolength:
+      // update various things
+      for (s=0; s<2; s++)
+      {
+        active[s]->xstart += active[s]->xdelta;
+        active[s]->u += active[s]->udelta;
+        active[s]->v += active[s]->vdelta;
+        active[s]->lightness += active[s]->lightdelta;
+        active[s]->depth += active[s]->depthdelta;
+      }
+      y++;
+    } while (--lines);
+
+    if (active[0]->height == 0) active[0] = &e[next++];
+    if (active[1]->height == 0) active[1] = &e[next++];
+  }
+}

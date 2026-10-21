@@ -1,0 +1,412 @@
+/*
+**    Name: filing.c
+**
+**    Date: Tue Jun 30 16:11:15 1998
+**
+*/
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <assert.h>
+
+#include "allocv.h"
+#include "list.h"
+#include "primitive.h"
+#include "filing.h"
+#include "object.h"
+#include "bucket.h"
+
+
+void c3d_saveobject(char* pathname, object* obj)
+{
+  FILE* file;
+  list* gwalk;
+
+  file = fopen(pathname, "w");
+
+  fprintf(file, "object {\n");
+  fprintf(file, "  name untitled\n\n");
+
+  for (gwalk = obj->groups; gwalk; gwalk = gwalk->prev)
+  {
+    group* thisgroup = (group*) gwalk->data;
+    list* pwalk;
+
+    fprintf(file, "  group {\n");
+//    fprintf(file, "    name %s\n\n", thisgroup->name);
+
+    for (pwalk = thisgroup->points; pwalk; pwalk = pwalk->prev)
+    {
+      upoint* thispoint = (upoint*) pwalk->data;
+
+      fprintf(file, "    point {\n");
+      fprintf(file, "      ref %d\n", thispoint->ref);
+      fprintf(file, "      pos %d,%d,%d\n",
+        thispoint->pos.x, thispoint->pos.y, thispoint->pos.z);
+      fprintf(file, "    }\n\n");
+    }
+
+    for (pwalk = thisgroup->polygons; pwalk; pwalk = pwalk->prev)
+    {
+      polygon* thispoly = (polygon*) pwalk->data;
+
+      fprintf(file, "    polygon {\n");
+      fprintf(file, "      link %d,%d,%d,%d\n",
+        thispoly->pt[0]->ref, thispoly->pt[1]->ref,
+        thispoly->pt[2]->ref, thispoly->pt[3]->ref);
+      fprintf(file, "      texture %d\n", thispoly->texture);
+      fprintf(file, "    }\n\n");
+    }
+
+    fprintf(file, "  }\n\n");
+  }
+
+  fprintf(file, "}\n");
+
+  fclose(file);
+}
+
+
+object* c3d_loadobject(char* pathname)
+{
+  FILE* file;
+  object* newobj = c3d_newobject();
+  levels level = level_OUTER;
+  char line[80];
+  char* tok;
+  list* gwalk;
+
+  file = fopen(pathname, "r");
+
+//  VDU(26); VDU(4);
+
+  do {
+    fgets(line, 80, file);
+//    printf("%d-> %s", level, line);
+    tok = strtok(line, " ");   // get first token
+
+    switch (level)
+    {
+      case level_OUTER:  // outer level
+      {
+        if (strcmp(tok, "object")==0) level = level_OBJECT;
+      }
+      break;
+
+      case level_OBJECT:  // found an object
+      {
+        if (strcmp(tok, "name")==0) {
+          tok = strtok(0, "\n");
+          strcpy(newobj->name, tok);
+
+        } else if (strcmp(tok, "}\n")==0) {
+          level = level_OUTER;
+
+        } else if (strcmp(tok, "group")==0) {
+          c3d_list_add(&newobj->groups);   // Create a new group
+          newobj->groups->data = c3d_newgroup();
+          level = level_GROUP;
+
+        }
+      }
+      break;
+
+      case level_GROUP:  // found a group
+      {
+        if (strcmp(tok, "name")==0) {
+          tok = strtok(0, "\n");
+//          strcpy(((group*)newobj->groups->data)->name, tok);
+        }
+
+        else if (strcmp(tok, "point")==0) level = level_POINT;
+        else if (strcmp(tok, "polygon")==0) level = level_POLYGON;
+        else if (strcmp(tok, "triangle")==0) level = level_TRIANGLE;
+        else if (strcmp(tok, "}\n")==0) level = level_OBJECT;
+      }
+      break;
+
+      case level_POINT:  // found a point
+      {
+        static int ref = 0;
+        static point at = {0,0,0};
+
+        if (strcmp(tok, "ref")==0) {
+          tok = strtok(0, "\n");
+          ref = atol(tok);
+          // make sure new points don't have duplicate ref
+          // (no new points made in objects in LM)
+//          if (ref >= newobj->pointref) newobj->pointref = ref+1;
+
+        } else if (strcmp(tok, "pos")==0) {
+          // to improve accuracy, objects sizes are multiplied by 2^8
+          tok = strtok(0, ",");
+          at.x = atol(tok);
+          tok = strtok(0, ",");
+          at.y = atol(tok);
+          tok = strtok(0, "\n");
+          at.z = atol(tok);
+
+        } else if (strcmp(tok, "}\n")==0) {
+          group* current = (group*) newobj->groups->data;  // group at head
+          upoint* newpt;
+
+          c3d_list_add(&current->points);
+          newpt = current->points->data = c_new(upoint);
+          newpt->pos = at;
+          newpt->ref = ref;
+//          newpt->info.flags.selected = 0;
+          level = level_GROUP;
+        }
+      }
+      break;
+
+      case level_POLYGON:  // found a polygon
+      {
+        static upoint* link[4] = {0,0,0,0};
+        static int linkref[4] = {0,0,0,0};
+        static point2d texcoords[4] = {0,0,0,8192,8192,8192,8192,0};  // sensible default vital!
+        static point normals[4] = {0,0,0,0,0,0,0,0,0,0,0,0};
+        static int texture = -1;
+
+        if (strcmp(tok, "link")==0) {
+          tok = strtok(0, ",");
+          link[0] = ptrfromref(newobj, linkref[0]=atol(tok));
+//          linkref[0] = (int)atol(tok);
+
+          tok = strtok(0, ",");
+          link[1] = ptrfromref(newobj, linkref[1]=atol(tok));
+//          linkref[1] = (int)atol(tok);
+
+          tok = strtok(0, ",");
+          link[2] = ptrfromref(newobj, linkref[2]=atol(tok));
+//          linkref[2] = (int)atol(tok);
+
+          tok = strtok(0, "\n");
+          link[3] = ptrfromref(newobj, linkref[3]=atol(tok));
+//          linkref[3] = (int)atol(tok);
+
+        } else if (strcmp(tok, "texture")==0) {
+          tok = strtok(0, "\n");
+          texture = atol(tok);
+
+        } else if (strcmp(tok, "texcoords")==0) {
+          int loop;
+          for (loop=0; loop<4; loop++)
+          {
+            tok = strtok(0, ",");
+            texcoords[loop].x = atol(tok);
+            tok = strtok(0, loop==3 ? "\n" : ",");
+            texcoords[loop].y = atol(tok);
+          }
+
+        } else if (strcmp(tok, "normals")==0) {
+          int loop;
+          for (loop=0; loop<4; loop++)
+          {
+            tok = strtok(0, ",");
+            normals[loop].x = atol(tok);
+            tok = strtok(0, ",");
+            normals[loop].y = atol(tok);
+            tok = strtok(0, loop==3 ? "\n" : ",");
+            normals[loop].z = atol(tok);
+          }
+
+        } else if (strcmp(tok, "}\n")==0) {
+          group* current = (group*) newobj->groups->data;  // group at head
+          polygon* newpoly;
+          int loop;
+
+          c3d_list_add(&current->polygons);
+          newpoly = current->polygons->data = c_new(polygon);
+          newpoly->texture = texture;
+          newpoly->edges = 4;
+          for (loop=0; loop<4; loop++)
+          {
+            newpoly->pt[loop] = link[loop];
+            newpoly->ptref[loop] = linkref[loop];
+            newpoly->normal[loop] = normals[loop];
+            newpoly->tex[loop] = texcoords[loop];
+          }
+          level = level_GROUP;
+        }
+      }
+      break;
+
+      case level_TRIANGLE:  // just the same as polygon but a few 4s changed to 3s
+      {
+        static upoint* link[4] = {0,0,0,0};
+        static int linkref[4] = {0,0,0,0};
+        static point2d texcoords[4] = {0,0,0,8192,8192,8192,8192,0};  // sensible default vital!
+        static int texture = -1;
+
+        if (strcmp(tok, "link")==0) {
+          tok = strtok(0, ",");
+          link[0] = ptrfromref(newobj, linkref[0]=atol(tok));
+          tok = strtok(0, ",");
+          link[1] = ptrfromref(newobj, linkref[1]=atol(tok));
+          tok = strtok(0, "\n");
+          link[2] = ptrfromref(newobj, linkref[2]=atol(tok));
+
+        } else if (strcmp(tok, "texture")==0) {
+          tok = strtok(0, "\n");
+          texture = atol(tok);
+
+        } else if (strcmp(tok, "texcoords")==0) {
+          int loop;
+          for (loop=0; loop<3; loop++)
+          {
+            tok = strtok(0, ",");
+            texcoords[loop].x = atol(tok);
+            tok = strtok(0, loop==3 ? "\n" : ",");
+            texcoords[loop].y = atol(tok);
+          }
+
+        } else if (strcmp(tok, "}\n")==0) {
+          group* current = (group*) newobj->groups->data;  // group at head
+          polygon* newpoly;
+          int loop;
+
+          c3d_list_add(&current->polygons);
+          newpoly = current->polygons->data = c_new(polygon);
+          newpoly->texture = texture;
+          newpoly->edges = 3;
+          for (loop=0; loop<3; loop++)
+          {
+            newpoly->pt[loop] = link[loop];
+            newpoly->ptref[loop] = linkref[loop];
+            newpoly->tex[loop] = texcoords[loop];
+          }
+          level = level_GROUP;
+        }
+      }
+
+    }
+  } while (level != level_OUTER);
+
+  fclose(file);
+
+  // Pass 2: try to resolve more links
+
+  for (gwalk = newobj->groups; gwalk; gwalk = gwalk->prev)
+  {
+    group* thisgroup = (group*) gwalk->data;
+    list* pwalk;
+
+    for (pwalk = thisgroup->polygons; pwalk; pwalk = pwalk->prev)
+    {
+      polygon* thispoly = (polygon*) pwalk->data;
+      int loop;
+      int error = 0;
+
+      for (loop=0; loop<thispoly->edges; loop++)
+      {
+        error |= (thispoly->pt[loop] = ptrfromref(newobj, thispoly->ptref[loop])) == 0;
+        thispoly->pt[loop]->freshness = 0;
+      }
+
+      if (error)
+      {
+        fprintf(stderr, "Some links could not be resolved whilst loading object\n");
+        exit(1);
+      }
+    }
+  }
+
+  // any group will do
+//  newobj->activegroup = (group*) newobj->groups->data;
+
+//  c3d_quickresolve(newobj);
+
+  return newobj;
+}
+
+upoint* ptrfromref(object* obj, int ref)
+{
+  list* gwalk;
+
+  for (gwalk = obj->groups; gwalk; gwalk = gwalk->prev)
+  {
+    list* pwalk;
+    group* thisgroup = (group*) gwalk->data;
+
+    for (pwalk = thisgroup->points; pwalk; pwalk = pwalk->prev)
+    {
+      upoint* thispoint = (upoint*) pwalk->data;
+      if (thispoint->ref == ref) return thispoint;
+    }
+  }
+
+  return 0;
+}
+
+
+// point compare function
+
+int ptcompare(const void* a, const void* b)
+{
+  upoint* pta = *((upoint**) a), *ptb = *((upoint**) b);
+  return pta->ref == ptb->ref ? 0 : pta->ref < ptb->ref ? -1 : 1;
+}
+
+// resolve all points in (large) objects quickly by indexing and sorting points,
+// then converting polygon point-references into pointers using binary search
+
+
+void c3d_quickresolve(object* obj)
+{
+  upoint** index;
+  int length = 0, fill = 0;
+  list* groupscan;
+
+  for (groupscan = obj->groups; groupscan; groupscan = groupscan->prev)
+  {
+    group* thisgroup = (group*) groupscan->data;
+    length += c3d_list_length(thisgroup->points);
+  }
+
+  index = c_newarray(upoint*, length);
+  assert(index);
+
+  for (groupscan = obj->groups; groupscan; groupscan = groupscan->prev)
+  {
+    group* thisgroup = (group*) groupscan->data;
+    list* pointscan;
+    for (pointscan = thisgroup->points; pointscan; pointscan = pointscan->prev)
+    {
+      index[fill++] = (upoint*) pointscan->data;
+    }
+  }
+
+  // this'll get it sorted
+  qsort(index, length, sizeof(upoint*), ptcompare);
+
+  for (groupscan = obj->groups; groupscan; groupscan = groupscan->prev)
+  {
+    group* thisgroup = (group*) groupscan->data;
+    list* polyscan;
+    upoint key;
+    for (polyscan = thisgroup->polygons; polyscan;)
+    {
+      polygon* thispolygon = (polygon*) polyscan->data;
+      list* tnext = polyscan->prev;
+      int loop, error=0;
+      for (loop=0; loop<4; loop++)
+      {
+        key.ref = thispolygon->ptref[loop];
+        thispolygon->pt[loop] = *((upoint**) bsearch(&key, index, length, sizeof(upoint*), ptcompare));
+        if (!thispolygon->pt[loop]) assert(!ptrfromref(obj, thispolygon->ptref[loop]));
+        error |= !thispolygon->pt[loop];
+        assert(thispolygon->pt[loop]);
+      }
+      if (error)
+      {
+        free(polyscan->data);
+        c3d_list_delinkitem(&thisgroup->polygons, polyscan);
+      }
+      polyscan = tnext;
+    }
+  }
+
+  free(index);
+}

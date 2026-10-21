@@ -1,0 +1,41 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+
+#ifndef SOUND_H
+#define SOUND_H 1
+
+typedef struct {
+  int dud;
+  int explosion;
+  int laser;
+  int wobble;
+  int deflect;
+  int bombed;
+  int launch;
+  int dock;
+} soundinfo;
+
+extern int flexisound_add(char *name, int looped);
+extern void flexisound_remove(int number);
+extern void flexisound_play(int number, int channel, int volume, int pitch);
+extern int readtimer1(int);
+
+
+#endif

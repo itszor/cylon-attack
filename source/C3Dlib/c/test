@@ -1,0 +1,81 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "c3d.h"
+
+extern vbufinfo* vbuf_hack;
+
+int main(void)
+{
+  vbufinfo* vbuf;
+  object* obj;
+  point pos = {0,0,128*256};
+  int spd = 256;
+  int count = 0;
+  matrix spin = {4096,0,0,0,4096,0,0,0,4096};
+  point around = {100,100,50};
+  int ang = 0, i;
+
+  c3d_initialise("C3Dlib:resources.");
+
+  c3d_normalize(&around);
+  c3d_generatematrix(&spin, &around, 16);
+
+  printf("sin(0)=%d, cos(0)=%d\n", c3d_sini(0), c3d_cosi(0));
+  printf("%d  %d  %d\n\n", around.x, around.y, around.z);
+  printf("%d  %d  %d\n%d  %d  %d\n%d  %d  %d\n",
+         spin.col[0].x,
+         spin.col[1].x,
+         spin.col[2].x,
+         spin.col[0].y,
+         spin.col[1].y,
+         spin.col[2].y,
+         spin.col[0].z,
+         spin.col[1].z,
+         spin.col[2].z);
+//  exit(1);
+
+  vbuf = c3d_newvbuf(0, 320, 256, 24, 3);
+  vbuf_hack = vbuf;
+  printf("Number of banks: %d\n", vbuf->numbanks);
+  printf("Screenbase: %x\n", (int)vbuf->buffer.screenbase);
+//  c3d_gfxdata->textures = c3d_loadfile("C3Dlib:resources.textures");
+  c3d_gfxdata->textures = malloc(32768);
+
+  for (i=0; i<8192; i++)
+    c3d_gfxdata->textures[i] = rand();
+
+  c3d_gfxdata->tables[0] = c3d_loadfile("C3Dlib:resources.clut");
+
+  obj = c3d_loadobject("C3Dlib:objects.iv3");
+
+  for (;;)
+  {
+    static point zero = {0,0,0};
+    matrix orient = {4096,0,0,0,4096,0,0,0,4096};
+
+    if (count >= 2)
+    {
+      c3d_generatematrix(&spin, &around, ang);
+      c3d_transformpt12(&orient.col[0], &orient.col[0], &spin, &zero);
+      c3d_transformpt12(&orient.col[1], &orient.col[1], &spin, &zero);
+      c3d_transformpt12(&orient.col[2], &orient.col[2], &spin, &zero);
+      ang += 16;
+    }
+
+    putchar(12);
+    c3d_startframe(vbuf);
+    c3d_addobject(vbuf, obj, &orient, &pos, 0);
+    c3d_endframe(vbuf);
+    pos.z+=spd;
+    if (pos.z > 256*256*3) spd=-512;
+    if (pos.z < 256*128) spd=512, count++;
+    c3d_displayframe(vbuf);
+  }
+
+  c3d_freevbuf(vbuf);
+  c3d_closedown();
+
+  return EXIT_SUCCESS;
+}

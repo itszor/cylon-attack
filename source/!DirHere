@@ -1,0 +1,7 @@
+Set C3Dlib$Path <Obey$Dir>.C3Dlib.
+RMEnsure DDEUtils 0.00 RMLoad System:Modules.ddeutils
+|RMEnsure DataVox 3.68 RMLoad <Obey$Dir>.DataVox
+|RMEnsure DataVox 3.68 Error This program needs a copy of DataVox to play sounds with
+RMEnsure FlexiSound 0.00 RMLoad <Obey$Dir>.FlexiSound
+RMEnsure FlexiSound 0.00 Error This program would really like a copy of FlexiSound before doing anything
+dir <obey$dir>

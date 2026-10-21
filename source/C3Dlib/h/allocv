@@ -1,0 +1,14 @@
+/*
+**    Name: allocv.h
+**
+**    Date: Mon Jul  6 17:26:58 1998
+**
+*/
+
+#ifndef C3D_ALLOCV_H
+#define C3D_ALLOCV_H 1
+
+#define c_new(n) malloc(sizeof(n))
+#define c_newarray(n, s) calloc(sizeof(n), s)
+
+#endif

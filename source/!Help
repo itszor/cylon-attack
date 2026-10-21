@@ -1,0 +1,283 @@
+
+
+           ______      __               ___   __  __             __  
+          / ____/_  __/ /___  ____     /   | / /_/ /_____ ______/ /__
+         / /   / / / / / __ \/ __ \   / /| |/ __/ __/ __ `/ ___/ //_/
+        / /___/ /_/ / / /_/ / / / /  / ___ / /_/ /_/ /_/ / /__/ ,<   
+        \____/\__, /_/\____/_/ /_/  /_/  |_\__/\__/\__,_/\___/_/|_|  
+             /____/                                                  
+
+      ___         _                          _                        
+       | |_  _   / \._  _ | _.    _ |_ _|_  /  _ ._ _|_ o._     _  _ |
+       | | |(/_  \_/| |_> |(_||_|(_|| | |_  \_(_)| | |_ || ||_|(/__> o
+                                  _|                                  
+
+                            © Julian Brown, 1999
+                                jules@eh.org
+                    http://www.ndirect.co.uk/~ebrown/jules
+
+
+Hi folks,
+
+This is a little, slightly incomplete rewrite of Cylon Attack (an old game for the BBC micro, you might be able to download the original somewhere). It's been sitting around on my hard disc for far too long now, so I thought I'd let it out for a breath of fresh air. It is currently known to run on a StrongARM Risc PC, RO3.7, YM will probably V with anything else.
+
+I'm releasing this software under the GPL. Read the licence.
+
+Credits (and apologies) must go to A&F Software, assumed long since defunct, and Doug Anderson, the original author of Cylon Attack for the BBC Micro. I hope I haven't caused too much offence.
+
+
+HOW TO PLAY
+
+I have shamelessly nicked the instructions from the original, to save writing any myself; they probably evoke more atmosphere than I could muster anyway...
+
+
+----------------------------------------------
+
+        INSTRUCTIONS
+        
+          You are the only interceptor
+        pilot on board an earth supply
+        ship.  The Cylons, determined
+        to stop your ship at any cost,
+        are sending wave upon wave of
+        their attack fleets to blast
+        you out of the sky!!
+        
+          It is entirely up to you to
+        defeat them!
+
+
+        Method of Play
+        
+          As each wave of Cylon ships
+        approaches, you are launched
+        from your Mother-ship into
+        battle.
+        
+          When (and IF!!) you manage
+        to destroy them all, you must
+        return and dock onto your
+        Mother-ship where you will be
+        refuelled before the next wave
+        of Cylons comes to resume the
+        attack!!
+
+
+        Your Instruments
+        
+          The main view screen fills
+        most of your "cockpit"s area,
+        with the Long Range Radar sat
+        directly above. This shows the
+        position of nearby ships which
+        are just out of direct view.
+        
+          Below the main screen, there
+        are five instruments showing:
+          1: Amount of Shields left
+          2: Amount of Fuel left
+          3: Rate of Climb
+          4: Rate of Turn
+          5: Amount of Laser left
+
+
+        Movements
+        
+          There are two different key
+        layouts (left or right-handed)
+        and a joystick option.
+        
+                   Up Down Left Right
+        Option1:   A   Z     <   >
+        Option2:   +   >     Z   X
+        Option3:    - Joystick -
+        
+        The keys/joystick control your
+        rate of Turn/Climb.
+        
+               ( H - Hold key )
+
+
+        Firing the Laser
+        
+          Your laser is fired by the
+        Space-bar on keyboard options
+        or the Fire-button on the
+        joystick option.
+        
+          Each shot uses up some of
+        your laser energy, which takes
+        a short time to recharge.
+        
+          The laser will not fire if
+        there is insufficient energy
+        to do so.
+
+
+        Using the Sights
+        
+          When you are lined up with a
+        Cylon ship, your sights will
+        change shape, indicating a
+        good chance of a hit.
+        
+          If they change a second time
+        (to a large "X"), then you
+        are close enough for the
+        targetting system to lock on
+        to the enemy Cylon, guiding
+        your laser bolts to their
+        target.
+
+
+        Shields
+        
+          Your shields will protect
+        you from the Cylon's missiles
+        for a while,  but quickly
+        become depleted if you are not
+        careful.
+        
+          You start each wave with a
+        full quota of shields, but if
+        you run out then you are
+        destroyed and the game is over
+
+
+        Fuel
+        
+          Your fuel tank is full at
+        the start of each wave, but
+        will steadily approach empty
+        during the game.
+          If you run out altogether
+        then you will be deemed "Dead
+        in space" and the game is over
+        However you may return to
+        your Mother-ship for extra
+        fuel (if available) at any
+        time during the game.
+          A low-fuel warning bell will
+        sound when your fuel level
+        falls below a safe margin.
+
+
+        Your Mother-ship
+        
+          Your Mother-ship's status
+        (shown top/right of cockpit)
+        displays the amount of shields
+        left, and the number of fuel
+        tanks available for emergency
+        refuelling in the middle of a
+        wave.  There are NO extra
+        shields available!
+        
+          The Mother-ship will only
+        come under direct attack when
+        you are refuelling, and will
+        be destroyed if her shields
+        run out.
+
+
+        Docking
+        
+          You must dock back on to
+        your Mother-ship at the end
+        of every wave. You may also
+        dock during a wave for extra
+        fuel, but not for shields.
+        
+          To dock, simply line up the
+        Mother-ship (coloured Yellow)
+        with your sights, and hold
+        position until she comes close
+        enough for the automatic
+        landing sequence to be
+        activated.  Be careful not
+        to shoot her accidentally!!!
+
+
+        High Score table
+        
+          Cylon Attack features a 50
+        name high score table, which
+        can be saved on disk at the
+        end of a game, and reloaded
+        the next time you want to play.
+          To save the table at the end
+        of a session, press BREAK and
+        insert a score disk in your
+        drive 0.       Then follow the
+        instructions on screen.
+        
+          You may make as many copies
+        as you like.
+
+
+        Competition
+
+          There is a £200 first prize
+        for the highest score reached
+        on Cylon Attack.
+
+          If you think your best score
+        is good enough to win, fill
+        in the entry form enclosed
+        with the cassette, and return
+        it to A&F Software Ltd with a
+        Floppy disk   containing your
+        saved high score table.
+          Only original entry forms
+        will be accepted. NO COPIES !!
+        Closing date: 1/3/84
+
+
+        And Finally..
+      
+          Would you like to see the
+        Instructions again before
+        loading the main program?
+
+----------------------------------------------
+
+
+The controls for "The Onslaught Continues!" are:
+
+        Z - move left
+        X - move right
+        ' - move up
+        / - move down
+    space - fire
+
+There is no joystick control, as I don't have the necessary hardware to play with. Your joystick may come with software to emulate keypresses (didn't it used to do that? I'm not sure...). Maybe that'll work.
+
+There are a couple of alterations and enhancements, but I'll leave them for you to find. Needless to say, there is not much point in sending a disc with your highscores on to A&F Software in the hope of winning the big prize (sorry!). Don't send them to me either, I'm just a poor student and I don't have £200 spare...
+
+Have fun,
+
+Julian
+
+
+...and just in case anyone cares...
+
+
+
+               CREDITS (in no particular order)
+
+     Code (C, ARM) - Julian (Norcroft C, Zap)
+     Graphics (2D) - Julian (POV-ray, Artworks, Paint...)
+     Graphics (3D) - Julian (C3Dedit, C3Dlib)
+             Sound - Julian (SFXM, SFXED, SampConv)
+       Playtesting - Julian
+
+
+
+Sorry if I've forgotten anyone.
+
+
+
+
+
+
+How egotistical was that, then? ;o)

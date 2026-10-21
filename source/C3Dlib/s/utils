@@ -1,0 +1,221 @@
+;
+;     Name: utils.s
+;
+;     Date: Wed Sep 23 15:17:18 1998
+;
+
+OS_WriteC			EQU	&0
+OS_Byte				EQU	&6
+OS_File				EQU	&8
+OS_Mouse			EQU	&1C
+OS_ChangeDynamicArea		EQU	&2A
+OS_ReadVduVariables		EQU	&31
+OS_ReadModeVariable		EQU	&35
+OS_RemoveCursors		EQU	&36
+OS_ReadMonotonicTime		EQU	&42
+OS_ReadDynamicArea		EQU	&5C
+OS_ScreenMode           	EQU	&65
+ColourTrans_WritePalette	EQU	&4075D
+
+
+
+	AREA |utils$$data|, DATA
+
+c3d_getscreenbaseinfo
+	% 16
+
+modeblock_320x256
+	DCD 1
+	DCD 320
+	DCD 256
+	DCD 3
+	DCD -1
+	DCD 3	; max logical colour=
+	DCD 255 ; fully definable palette
+	DCD 4	; X-eig =
+	DCD 2
+	DCD 5	; Y-eig =
+	DCD 2
+	DCD -1
+
+
+	AREA |utils$$code|, CODE, READONLY
+
+	IMPORT malloc
+	IMPORT exit
+
+; input   r0 - pathname
+; returns r0 - pointer to file in memory
+	EXPORT c3d_loadfile
+c3d_loadfile
+	stmfd r13!,{r4-r7,r14}
+	mov r6,r0
+	mov r1,r6	; pathname
+	mov r0,#5	; read catalogue info
+	swi OS_File
+	cmp r0,#0	; object not found
+	moveq r0,#1
+	bleq exit
+	ldmeqfd r13!,{r4-r7,pc}^
+	mov r0,r4
+	bl malloc
+	mov r7,r0	; r7 safe over OS_File
+	mov r2,r0	; load address
+	mov r1,r6	; pathname
+	mov r0,#255	; load file (File$Path)
+	mov r3,#0	; necessary
+	swi OS_File
+	mov r0,r7	; address loaded to
+	ldmfd r13!,{r4-r7,pc}^
+
+; r0 - pointer to raw palette
+	EXPORT c3d_setpalette
+c3d_setpalette
+	stmfd r13!,{r4,r14}
+	mov r2,r0
+	mvn r0,#0
+	mvn r1,#0
+	mov r3,#0
+	mov r4,#0
+	swi ColourTrans_WritePalette
+	ldmfd r13!,{r4,pc}^
+
+; sets the old-style screen mode
+	EXPORT c3d_screenmode
+c3d_screenmode
+	adrl r1,modeblock_320x256
+	mov r0,#0	; select mode
+	swi OS_ScreenMode
+	movs pc,lr
+
+	EXPORT c3d_removecursors
+c3d_removecursors
+	swi OS_RemoveCursors
+	movs pc,lr
+
+	EXPORT c3d_getscreenbase
+c3d_getscreenbase
+	adrl r0,c3d_getscreenbaseinfo
+	mov r1,#149	; hardware screen start
+	mvn r2,#0	; NOT -1
+	stmia r0,{r1,r2}
+	mov r1,r0
+	swi OS_ReadVduVariables
+	ldr r0,[r0]
+	movs pc,lr
+
+; input  r0 - bank to display now
+;	 r1 - bank to write to
+	EXPORT c3d_setscreenbanks
+c3d_setscreenbanks
+	stmfd r13!,{r4-r5,r14}
+	mov r4,r0
+	mov r5,r1
+	mov r0,#19
+	swi OS_Byte
+	add r1,r4,#1
+	mov r0,#112	; VDU screen bank
+	swi OS_Byte
+	add r1,r5,#1
+	mov r0,#113	; hardware screen bank
+	swi OS_Byte
+	ldmfd r13!,{r4-r5,pc}^
+
+	IMPORT __rt_sdiv
+
+; input  r0 - number of banks to try to allocate
+; output r0 - number of banks successfully allocated
+	EXPORT c3d_allocatescreenbanks
+c3d_allocatescreenbanks
+	stmfd r13!,{r4-r7,r14}
+	mov r4,r0
+	mvn r0,#:NOT:-1	; current screen mode
+	mov r1,#7	; screen size in bytes
+	swi OS_ReadModeVariable
+	mul r5,r2,r4	; r5 is size of all the required screenbanks
+	mov r7,r2	; r7 is now the size of a screen in bytes
+	mov r0,#2	; screen area
+	swi OS_ReadDynamicArea
+	mov r6,r1	; result in r1
+	subs r1,r5,r6	; r1 = difference between current size of area and required size
+	movlt r1,#0	; don't ever try to deallocate screenspace?
+	mov r0,#2	; screen area
+	swi OS_ChangeDynamicArea
+	add r1,r6,r1	; new size of area
+	mov r0,r7	; size of screen in bytes
+	bl __rt_sdiv	; seems to do r0=r1/r0
+	cmp r0,r4
+	movgt r0,r4
+	ldmfd r13!,{r4-r7,pc}^
+
+	EXPORT c3d_resetscreen
+c3d_resetscreen
+	mov r3,r0
+	mov r0,#112
+	mov r1,#0
+	swi OS_Byte
+	mov r0,#113
+	mov r1,#0
+	swi OS_Byte
+	mov r1,#0
+	mov r2,#160*1024
+reset_loop
+	str r1,[r3],#4
+	subs r2,r2,#4
+	bgt reset_loop
+	movs pc,lr
+
+; r0 base of bank to clear
+	EXPORT c3d_clearbank
+c3d_clearbank
+	stmfd r13!,{r4-r9,r14}
+	mov r1,#0
+	mov r2,#0
+	mov r3,#0
+	mov r4,#0
+	mov r5,#0
+	mov r6,#0
+	mov r7,#0
+	mov r8,#0
+	mov r9,#81920
+reset_loop2
+	stmia r0!,{r1-r8}
+	subs r9,r9,#32
+	bgt reset_loop2
+
+	ldmfd r13!,{r4-r9,pc}^
+
+; r0 - &x
+; r1 - &y
+; r2 - &button
+	EXPORT c3d_getmouse
+c3d_getmouse
+	stmfd sp!,{r4-r6,lr}
+	mov r4,r0
+	mov r5,r1
+	mov r6,r2
+	swi OS_Mouse
+	str r0,[r4]
+	str r1,[r5]
+	str r2,[r6]
+	ldmfd sp!,{r4-r6,pc}^
+
+	EXPORT c3d_keydown
+c3d_keydown
+	add r1,r0,#256	; 256-inkey#
+	mov r2,#&FF
+	mov r0,#129
+	swi OS_Byte
+	cmp r1,#255
+	moveq r0,#1
+	movne r0,#0
+	movs pc,r14
+
+
+; exit r0 - time in cs
+	EXPORT c3d_gettime
+c3d_gettime
+	swi OS_ReadMonotonicTime
+	movs pc,r14
+
+	END

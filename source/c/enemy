@@ -1,0 +1,952 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "swis.h"
+
+#include "enemy.h"
+#include "scale.h"
+#include "scene.h"
+#include "allocv.h"
+
+enemyinfo* newenemy(enemytype type)
+{
+  enemyinfo* enemy = c_new(enemyinfo);
+
+  enemy->type = type;
+  enemy->mode = enemymode_IDLE;
+  enemy->statecounter = 0;
+  enemy->pos.x = rand()&32767;
+  enemy->pos.y = rand()&32767;
+  enemy->speed.x = enemy->speed.y = 0;
+  enemy->distance = 262144;
+  enemy->energy = 1500;
+  enemy->damage = 0;
+  enemy->whiteout = 0;
+  enemy->subclass = 0;
+
+  // Initialisation for specific types of enemy
+  switch (type)
+  {
+    case enemytype_SNAKE:
+    {
+      snakeinfo* sn;
+      sn = enemy->extra = c_new(snakeinfo);
+      sn->length = 1;
+      sn->maxlen = TRAILLEN;
+      sn->ptr = 0;
+      sn->angle = rand()&1023;
+      qrand(sn->angled, CURVINESS);
+    }
+    break;
+
+    default: enemy->extra = 0;
+  }
+
+  return enemy;
+}
+
+void deleteenemy(enemyinfo* enemy)
+{
+  if (enemy->extra) free(enemy->extra);
+  free(enemy);
+}
+
+void plotenemies(gameinfo* game)
+{
+  list* walk;
+  int mod144 = game->ticker % 144;
+  int mod36 = ((game->ticker/4)%36);
+  int mod72 = ((game->ticker/4)%72);
+  int mod16 = ((game->ticker/4)&15);
+  sceneinfo* scene = game->scene;
+  void (*p_64x64)(int*, int*, point2d*, int);
+  void (*p_32x16)(int*, int*, point2d*);
+
+  for (walk=game->enemies; walk; walk=walk->prev)
+  {
+    enemyinfo* enemy = (enemyinfo*) walk->data;
+    point2d pos;
+    int centre = (32*65536)/enemy->distance;
+
+    if (enemy->whiteout)
+    {
+      p_64x64=smw_64x64;
+      p_32x16=mw_32x16;
+    }
+    else
+    {
+      p_64x64=sm_64x64;
+      p_32x16=m_32x16;
+    }
+
+    if (toscreen(game->scene, &pos, &enemy->pos) || enemy->type==enemytype_SNAKE)
+    {
+      switch (enemy->type)
+      {
+        case enemytype_SKULL:
+        case enemytype_FIGHTER:
+        {
+          pos.x = (pos.x>>4)-centre;
+          pos.y = (pos.y>>4)-centre;
+            p_64x64(game->scene->buffer, &game->scene->bitmaps.alien[enemy->type*64*64/4], &pos,
+                    enemy->distance);
+        }
+        break;
+
+        case enemytype_SNAKE_A:
+        {
+          pos.x = (pos.x>>4)-centre;
+          pos.y = (pos.y>>4)-centre;
+            p_64x64(game->scene->buffer, &game->scene->bitmaps.alien[2*64*64/4], &pos,
+                    enemy->distance);
+        }
+        break;
+
+        case enemytype_SNAKE:
+        {
+          int i;
+          snakeinfo* snake = (snakeinfo*) enemy->extra;
+          // This loop is screwy now...
+          for (i=snake->length-SEGLENGTH; i>=0;)
+          {
+            int index=snake->ptr-i;
+            if (index<0) index+=TRAILLEN;
+            if (toscreen(game->scene, &pos, &snake->trail[index]))
+            {
+              pos.x = (pos.x>>4)-centre;
+              pos.y = (pos.y>>4)-centre;
+              sm_64x64(game->scene->buffer, &game->scene->bitmaps.alien[2*64*64/4], &pos,
+                       enemy->distance);
+            }
+            i-=SEGLENGTH;
+            if (i<0 && i>-SEGLENGTH) i=0;
+            else if (i<=-SEGLENGTH) i=-1;
+          }
+        }
+        break;
+
+        case enemytype_SAUCER:
+        {
+          pos.x = (pos.x>>4)-centre;
+          pos.y = (pos.y>>4)-centre;
+            p_64x64(game->scene->buffer, &game->scene->bitmaps.saucer[mod72*64*64/4], &pos,
+                    enemy->distance);
+        }
+        break;
+
+        case enemytype_MOTHERSHIP:
+        {
+          if (enemy->distance>65535)
+          {
+            pos.x = (pos.x>>4)-centre;
+            pos.y = (pos.y>>4)-centre;
+            p_64x64(game->scene->buffer, &game->scene->bitmaps.mothership[mod36*64*64/4], &pos,
+                    enemy->distance);
+          }
+          else
+          {
+            matrix orient = {4096,0,0,0,0,-4096,0,4096,0}, orient2, rot;
+            point around = {0, 0, 256}, zero;
+            c3d_generatematrix(&rot, &around, (mod144*2048)/36);
+            zero.z = enemy->distance*6;
+            zero.x = (pos.x-16*160)*84;
+            zero.y = (16*128-pos.y)*84;
+            c3d_startframe(scene->viewbuf);
+            c3d_transformpt12(&orient2.col[0], &orient.col[0], &rot, 0);
+            c3d_transformpt12(&orient2.col[1], &orient.col[1], &rot, 0);
+            c3d_transformpt12(&orient2.col[2], &orient.col[2], &rot, 0);
+            c3d_addobject(scene->viewbuf, scene->mothership, &orient2, &zero, 0);
+            c3d_endframe(scene->viewbuf);
+            switch (game->state)
+            {
+              case gamestate_IDLE:
+              {
+                game->state=gamestate_READYTODOCK;
+              }
+              break;
+
+              case gamestate_READYTODOCK:
+              {
+                game->pos.x = ((16384-enemy->pos.x)&32767) << 2;
+                game->pos.y = ((16384-enemy->pos.y)&32767) << 2;
+              }
+              break;
+            }
+          }
+        }
+        break;
+
+        case enemytype_SHELL:
+        {
+          pos.x = (pos.x>>4)-centre;
+          pos.y = (pos.y>>4)-centre;
+          p_64x64(game->scene->buffer, &game->scene->bitmaps.shell[mod72*64*64/4], &pos,
+                  enemy->distance);
+        }
+        break;
+
+        case enemytype_BOMB1:
+        {
+          pos.x = (pos.x>>4)-(centre>>1);
+          pos.y = (pos.y>>4)-(centre>>2);
+          p_32x16(game->scene->buffer,
+                  &game->scene->bitmaps.bomb1[mod16*32*16/4], &pos);
+        }
+        break;
+
+        case enemytype_BOMB2:
+        {
+          pos.x = (pos.x>>4)-(centre>>1);
+          pos.y = (pos.y>>4)-(centre>>2);
+          p_32x16(game->scene->buffer,
+                  &game->scene->bitmaps.bomb2[mod16*32*16/4], &pos);
+        }
+        break;
+
+        case enemytype_POWERUP:
+        {
+          pos.x = (pos.x>>4)-(centre>>1);
+          pos.y = (pos.y>>4)-(centre>>2);
+          p_32x16(game->scene->buffer,
+                  &(game->scene->bitmaps.powerup[enemy->subclass])[mod16*32*16/4], &pos);
+        }
+        break;
+
+        case enemytype_EXPLOSION:
+        {
+          const point2d sz = {120,112};
+          point2d size = {120,112};
+          int frame = 49-(enemy->statecounter >> 4);
+          pos.x = (pos.x>>4)-sz.x/2;
+          pos.y = (pos.y>>4)-sz.y/2;
+          if (frame>=0 && frame<50)
+          {
+            om_XxY(game->scene->buffer,
+                   &game->scene->bitmaps.explo[frame*sz.x*sz.y/4], &pos, &size);
+          }
+        }
+      }
+    }
+  }
+}
+
+int intersect(gameinfo* game, enemyinfo* enemy, point2d* with)
+{
+  point2d pos;
+
+  if (toscreen(game->scene, &pos, &enemy->pos))
+  {
+    int l, b, r, t;
+    int radius = (512*65536)/enemy->distance;
+    if (enemy->type < enemytype_POWERUP)
+    {
+      l = pos.x-radius;
+      r = pos.x+radius;
+      t = pos.y-radius;
+      b = pos.y+radius;
+    }
+    else
+    {
+      l = pos.x-(radius>>1);
+      r = pos.x+(radius>>1);
+      t = pos.y-(radius>>2);
+      b = pos.y+(radius>>2);
+    }
+    if (l<with->x && r>with->x && t<with->y && b>with->y) return 1;
+  }
+
+  return 0;
+}
+
+int atcentreof(gameinfo* game, enemyinfo* enemy, point2d* with)
+{
+  point2d pos;
+
+  if (toscreen(game->scene, &pos, &enemy->pos))
+  {
+    int l, b, r, t;
+    int radius = (128*65536)/enemy->distance;
+    l = pos.x-radius;
+    r = pos.x+radius;
+    t = pos.y-radius;
+    b = pos.y+radius;
+    if (l<with->x && r>with->x && t<with->y && b>with->y) return 1;
+  }
+
+  return 0;
+}
+
+void updateenemies(gameinfo* game)
+{
+  list* e, *ep;
+
+  for (e=game->enemies; e; e=ep)
+  {
+    enemyinfo* enemy = (enemyinfo*) e->data;
+    behaviour_fn action;
+    int keep = 1;
+    // treat ep with care; items can be removed as list is traversed
+    ep = e->prev;
+
+    // Control enemy
+    action = game->enemyctrl[enemy->type][enemy->mode];
+    if (action) keep = action((void*)game, (void*)enemy);
+
+    if (!keep)
+    {
+      deleteenemy(enemy);
+      c3d_list_delinkitem(&game->enemies, e);
+    }
+
+    enemy->pos.x = (enemy->pos.x+enemy->speed.x)&32767;
+    enemy->pos.y = (enemy->pos.y+enemy->speed.y)&32767;
+    enemy->energy++;
+    if (enemy->whiteout>0) enemy->whiteout--;
+  }
+}
+
+void testcollision(gameinfo* game)
+{
+  list* e, *ep;
+  int vol=0x170;
+  point2d pos;
+  int samp = 0;
+
+  for (e=game->enemies; e; e=ep)
+  {
+    enemyinfo* enemy = (enemyinfo*) e->data;
+    ep = e->prev;
+    if (enemy->type == enemytype_SNAKE)
+    {
+      int k;
+      snakeinfo* snake = (snakeinfo*) enemy->extra;
+      for (k=0; k<snake->length; k+=SEGLENGTH)
+      {
+        enemyinfo dummy;  // Make a fake enemy for collision testing...
+        int index = snake->ptr-k;
+        if (index<0) index+=TRAILLEN;
+        dummy.pos = snake->trail[index];
+        dummy.distance = 131072;
+        toscreen(game->scene, &pos, &game->shotpos);
+        if (intersect(game, &dummy, &pos))
+        {
+          samp = 1;
+          if (k==0)  // Explode whole snake
+          {
+            int j;
+            enemy->type = enemytype_EXPLOSION;
+            enemy->mode = enemymode_IDLE;
+            enemy->statecounter = 49*16;
+            for (j=SEGLENGTH; j<snake->length; j+=SEGLENGTH)
+            {
+              enemyinfo* explo;
+              int ind = snake->ptr-j;
+              if (ind<0) ind+=TRAILLEN;
+              c3d_list_add(&game->enemies);
+              explo = game->enemies->data = (void*) newenemy(enemytype_EXPLOSION);
+              explo->pos = snake->trail[ind];
+              explo->statecounter = 49*16;
+            }
+            game->score += 50;
+            break;  // ew!
+          }
+          else   // Explode one section and split
+          {
+            enemyinfo* explo, *split;
+            snakeinfo* sn2;
+            int c;
+            int remain = snake->length-k-SEGLENGTH;
+
+            c3d_list_add(&game->enemies);
+            explo = game->enemies->data = (void*) newenemy(enemytype_EXPLOSION);
+            explo->pos = snake->trail[index];
+            explo->statecounter = 49*16;
+
+            if (snake->maxlen-k>SEGLENGTH)
+            {
+              int from;
+              c3d_list_add(&game->enemies);
+              split = game->enemies->data = (void*) newenemy(enemytype_SNAKE);
+              index-=SEGLENGTH;
+              if (index<0) index+=TRAILLEN;
+              split->pos = snake->trail[index];
+              sn2 = (snakeinfo*) split->extra;
+              // Duplicate trail
+              for (c=0; c<remain; c++)
+              {
+                from = index-c;
+                if (from<0) from+=TRAILLEN;
+                sn2->trail[remain-c-1] = snake->trail[from];
+              }
+              sn2->length = sn2->maxlen = remain;
+              sn2->ptr = remain-1;
+            }
+
+            // Eek - I think...
+            snake->length = snake->maxlen = k;
+
+            game->score += 25;
+            break;
+          }
+        }
+      }
+    }
+    else   // not a snake
+    {
+      toscreen(game->scene, &pos, &game->shotpos);
+      if (intersect(game, enemy, &pos))
+      {
+        int thisvol;
+
+        switch (enemy->type)
+        {
+          case enemytype_SKULL: game->score += 10; break;
+          case enemytype_FIGHTER: game->score += 15; break;
+          case enemytype_SAUCER: game->score += 25; break;
+          case enemytype_SHELL: game->score += 35; break;
+          case enemytype_SNAKE_A: game->score += 65; break;
+          case enemytype_MOTHERSHIP: game->msshield -= 32768; break;
+          case enemytype_BOMB1: game->score += 5; break;
+          case enemytype_BOMB2: game->score += 8; break;
+          case enemytype_POWERUP:
+          {
+            dopowerup(game, enemy);
+            game->score += 50;
+          }
+          break;
+          case enemytype_EXPLOSION: continue;
+        }
+
+        if (enemy->type==enemytype_MOTHERSHIP)
+        {
+          if (game->msshield<0)
+          {
+            enemy->type = enemytype_EXPLOSION;
+            enemy->mode = enemymode_IDLE;
+            enemy->statecounter = 49*16;
+            game->msshield = 0;
+            samp = 1;
+          }
+          else
+          {
+            enemy->whiteout = 10;
+            samp = 2;
+          }
+        }
+        else
+        {
+          switch (game->lasertype)
+          {
+            case 0:
+            case 1:
+            enemy->damage++;
+            break;
+
+            case 2:
+            enemy->damage+=2;
+            break;
+
+            case 3:
+            enemy->damage+=3;
+            break;
+          }
+          if (enemy->damage>game->enemyshield[enemy->type])
+          {
+            enemy->type = enemytype_EXPLOSION;
+            enemy->mode = enemymode_IDLE;
+            enemy->statecounter = 49*16;
+            samp = 1;
+          }
+          else
+          {
+            enemy->whiteout = 10;
+            samp = 2;
+          }
+        }
+
+        // Explosion gets quieter further away, but not by very much
+        thisvol = 0x100+(127-(enemy->distance-65536)/14000);
+        if (thisvol>vol) vol=thisvol;
+      }
+    }
+  }
+  _swix(Sound_Stereo, _INR(0,1), 3, (pos.x/24)-128);
+  switch (samp)
+  {
+    case 0: flexisound_play(game->sound.dud, 3, vol, 0x1800); break;
+    case 1: flexisound_play(game->sound.explosion, 3, vol, 0x1800); break;
+    case 2: flexisound_play(game->sound.deflect, 3, vol, 0x1400); break;
+  }
+
+  game->state = gamestate_IDLE;
+}
+
+void dopowerup(gameinfo* game, enemyinfo* enemy)
+{
+  switch (enemy->subclass)
+  {
+    case 0:  // 'F' type powerup - instant fuel replenish
+    {
+      game->fuel += 32768;
+      if (game->fuel>65535) game->fuel = 65535;
+      message(game, "INSTANT REFUEL");
+    }
+    break;
+
+    case 1:  // 'S' type powerup - instant shield repair
+    {
+      game->shield += 32768;
+      if (game->shield>65535) game->shield = 65535;
+      message(game, "SHIELD REPAIR");
+    }
+    break;
+
+    case 2:  // '?' type powerup - random effect
+    {
+      switch (rand()&3)
+      {
+        case 0:
+        {
+          game->powerup = powerup_INVINCIBLE;
+          message(game, "INVINCIBLE");
+        }
+        break;
+
+        case 1:
+        {
+          game->powerup = powerup_REVERSEKEYS;
+          message(game, "REVERSE CONTROLS");
+        }
+        break;
+
+        case 2:
+        {
+          game->powerup = powerup_DOUBLESPEED;
+          message(game, "SPIN BOOSTER");
+        }
+        break;
+
+        case 3:
+        {
+          game->powerup = powerup_JELLY;
+          message(game, "JELLY CONTROLS");
+        }
+        break;
+      }
+      game->poweruptimer = 2000;
+    }
+    break;
+
+    case 3:  // 'L' type powerup - better laser
+    {
+      game->lasertype++;
+      if (game->lasertype>3) game->lasertype = 3;
+      switch (game->lasertype)
+      {
+        // yawn, these are just so passe
+        case 0: message(game, "STANDARD LASER"); break;  // ooh!
+        case 1: message(game, "RECHARGE BOOST"); break;  // aah!
+        case 2: message(game, "SUPER SHOOTER"); break;  // wooow!
+        case 3: message(game, "MASTER BLASTER"); break; // run out of ideas. A good while ago...
+      }
+    }
+    break;
+  }
+}
+
+int default_idle(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  point2d pos;
+
+  randomwalk(enemy, 25, 100, 16, 32);
+
+  if (enemy->energy>2000 && toscreen(game->scene, &pos, &enemy->pos))
+  {
+    enemy->mode = enemymode_APPROACH;
+    enemy->statecounter = 170;
+    enemy->speed.x = (2560-pos.x)/192;
+    enemy->speed.y = (2048-pos.y)/192;
+    enemy->energy = 0;
+  }
+  return 1;
+}
+
+int default_approach(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  point2d pos;
+  if (toscreen(game->scene, &pos, &enemy->pos))
+  {
+    enemy->distance -= 1024;
+    if (enemy->distance < 65536)
+    {
+      enemy->distance = 65536;
+      enemy->mode = enemymode_ATTACK;
+      enemy->statecounter = 50;
+      enemy->speed.x = (2560-pos.x)/50;
+      enemy->speed.y = (2048-pos.y)/50;
+    }
+  }
+  else
+  {
+    enemy->distance -= 1024;
+    if (enemy->distance < 65536)
+    {
+      enemy->distance = 65536;
+      enemy->mode = enemymode_ATTACK;
+      enemy->statecounter = 50;
+      qrand(enemy->speed.x, 16);
+      qrand(enemy->speed.y, 16);
+    }
+  }
+
+  return 1;
+}
+
+int default_retreat(void* game_p, void* enemy_p)
+{
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  enemy->distance += 512;
+  if (enemy->distance > 262144)
+  {
+    enemy->distance = 262144;
+    enemy->mode = enemymode_IDLE;
+    enemy->statecounter = 1000;
+  }
+  return 1;
+}
+
+int skullfighter_attack(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  if (enemy->energy>300)  // 3 seconds
+  {
+    enemyinfo* newen;
+    // Make a bomb
+    c3d_list_add(&game->enemies);
+    newen = game->enemies->data = (void*) newenemy(enemytype_BOMB1);
+    newen->mode = enemymode_IDLE;
+    qrand(newen->speed.x, 16);
+    qrand(newen->speed.y, 16);
+    newen->pos.x = enemy->pos.x;
+    newen->pos.y = enemy->pos.y+320;
+    newen->statecounter = game->fuse1;
+    newen->distance = 65536;
+    if (enemy->type==enemytype_SKULL) newen->energy = 6144;
+      else newen->energy = 7168;
+
+    enemy->energy = 0;
+  }
+  randomwalk(enemy, 25, 100, 16, 32);
+  checkretreat(game, enemy);
+  return 1;
+}
+
+int saucer_attack(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  // sometimes make a string of scarier bombs
+  if (enemy->energy>66)  // 0.66 seconds
+  {
+    enemyinfo* newen;
+    // Make a bomb
+    c3d_list_add(&game->enemies);
+    newen = game->enemies->data = (void*) newenemy(enemytype_BOMB2);
+    newen->mode = enemymode_IDLE;
+    qrand(newen->speed.x, 16);
+    qrand(newen->speed.y, 16);
+    newen->pos.x = enemy->pos.x;
+    newen->pos.y = enemy->pos.y+320;
+    newen->statecounter = game->fuse2;
+    newen->distance = 65536;
+    newen->energy = 8192;
+
+    enemy->energy = 0;
+  }
+  randomwalk(enemy, 25, 100, 16, 32);
+  checkretreat(game, enemy);
+  return 1;
+}
+
+int shell_attack(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  // sometimes make a skull, or sometimes a string of bombs
+  if (enemy->energy>300)  // 3 seconds
+  {
+    enemyinfo* newen;
+    // Make a bomb
+    c3d_list_add(&game->enemies);
+    newen = game->enemies->data = (void*) newenemy(enemytype_SKULL);
+    newen->mode = enemymode_IDLE;
+    qrand(newen->speed.x, 16);
+    qrand(newen->speed.y, 16);
+    newen->pos.x = enemy->pos.x;
+    newen->pos.y = enemy->pos.y+320;
+    newen->statecounter = 50;
+    newen->distance = 262144;
+
+    enemy->energy = 0;
+  }
+  randomwalk(enemy, 25, 100, 16, 32);
+  checkretreat(game, enemy);
+  return 1;
+}
+
+void randomwalk(enemyinfo* enemy, int shortest, int range, int delta, int bound)
+{
+  if (enemy->statecounter==0)
+  {
+    enemy->statecounter = shortest+rand()%range;
+    arand(enemy->speed.x, delta);
+    arand(enemy->speed.y, delta);
+    if (enemy->speed.x>bound) enemy->speed.x=bound;
+    if (enemy->speed.x<-bound) enemy->speed.x=-bound;
+    if (enemy->speed.y>bound) enemy->speed.y=bound;
+    if (enemy->speed.y<-bound) enemy->speed.y=-bound;
+  }
+  else enemy->statecounter--;
+}
+
+void checkretreat(gameinfo* game, enemyinfo* enemy)
+{
+  point2d pos;
+  if (!(toscreen(game->scene, &pos, &enemy->pos) && rand()&255))
+  {
+    enemy->mode = enemymode_RETREAT;
+    enemy->distance = 65536;
+    qrand(enemy->speed.x, 64);
+    qrand(enemy->speed.y, 64);
+  }
+}
+
+int snake_idle(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  snakeinfo* snake = (snakeinfo*) enemy->extra;
+  extern int* c3d_sintab, *c3d_costab;
+  point2d pos;
+
+  if (snake->length<snake->maxlen) snake->length++;
+
+  snake->ptr++;
+  if (snake->ptr>=TRAILLEN) snake->ptr = 0;
+
+  snake->trail[snake->ptr] = enemy->pos;
+
+  if (!(rand()&255)) qrand(snake->angled, CURVINESS);
+
+  snake->angle = (snake->angle+snake->angled)&1023;
+  enemy->pos.x += c3d_sintab[snake->angle]>>8;
+  enemy->pos.y += c3d_costab[snake->angle]>>8;
+  enemy->distance = 131072;
+
+  if (toscreen(game->scene, &pos, &enemy->pos) && !(rand()&511))
+  {
+    if (snake->maxlen>SEGLENGTH)  // break off tail
+    {
+      int index = snake->ptr-(snake->length-SEGLENGTH);
+      enemyinfo* attacker;
+      if (index<0) index+=TRAILLEN;
+      snake->length -= SEGLENGTH;
+      snake->maxlen -= SEGLENGTH;
+      c3d_list_add(&game->enemies);
+      attacker = game->enemies->data = (void*) newenemy(enemytype_SNAKE_A);
+      attacker->pos = snake->trail[index];
+      qrand(attacker->speed.x, 8);
+      qrand(attacker->speed.y, 8);
+      attacker->distance = 131072;
+      attacker->mode = enemymode_APPROACH;
+    }
+    else   // last piece attacks
+    {
+      enemy->type = enemytype_SNAKE_A;
+      qrand(enemy->speed.x, 8);
+      qrand(enemy->speed.y, 8);
+      enemy->distance = 131072;
+      enemy->mode = enemymode_APPROACH;
+    }
+  }
+
+  return 1;
+}
+
+int snake_approach(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  point2d pos;
+  if (toscreen(game->scene, &pos, &enemy->pos))
+  {
+    enemy->distance -= 256;
+    if (enemy->distance < 65536)
+    {
+      enemy->distance = 65536;
+      enemy->mode = enemymode_ATTACK;
+      enemy->energy = rand()&127;
+      enemy->statecounter = 50;
+      enemy->speed.x = (2560-pos.x)/50;
+      enemy->speed.y = (2048-pos.y)/50;
+    }
+  }
+  else
+  {
+    enemy->distance -= 256;
+    if (enemy->distance < 65536)
+    {
+      enemy->distance = 65536;
+      enemy->mode = enemymode_ATTACK;
+      enemy->statecounter = 50;
+      qrand(enemy->speed.x, 16);
+      qrand(enemy->speed.y, 16);
+    }
+  }
+  return 1;
+}
+
+int snake_attack(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  enemyinfo* bomb;
+  int i;
+
+  if (enemy->energy>140) enemy->whiteout = 10;
+
+  if (enemy->energy>150)
+  {
+    for (i=0; i<4; i++)
+    {
+      c3d_list_add(&game->enemies);
+      bomb = game->enemies->data = (void*) newenemy(enemytype_BOMB2);
+      bomb->pos = enemy->pos;
+      qrand(bomb->speed.x, 16);
+      qrand(bomb->speed.y, 16);
+      bomb->statecounter = game->fuse2;
+      bomb->distance = 65536;
+      bomb->energy = 2048;    // not very lethal
+    }
+    return 0;
+  }
+  return 1;
+}
+
+int explosion_idle(void* game_p, void* enemy_p)
+{
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  if (enemy->statecounter<=0)
+  {
+    return 0;
+  } else enemy->statecounter-=8;
+  return 1;
+}
+
+int bomb_idle(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  point2d pos;
+
+  if (enemy->statecounter==0)
+  {
+    if (toscreen(game->scene, &pos, &enemy->pos))
+    {
+      int i;
+//            point2d pos;
+//            pos.x = (16384-game->scene->offset.x)&32767;
+//            pos.y = (16384-game->scene->offset.y)&32767;
+//            toscreen(game->scene, &pos, &pos);
+      if (game->powerup!=powerup_INVINCIBLE) game->shield -= enemy->energy;
+      game->explostate = 50;
+      for (i=(rand()&3)+1; i>=0; i--)
+      {
+        enemyinfo* explo;
+        // Make an explosion
+        c3d_list_add(&game->enemies);
+        explo = game->enemies->data = (void*) newenemy(enemytype_EXPLOSION);
+        explo->mode = enemymode_IDLE;
+        qrand(explo->speed.x, 32);
+        qrand(explo->speed.y, 32);
+        explo->pos = enemy->pos;
+        explo->statecounter = 49*16-(rand()&63);
+        explo->distance = 65536;
+        _swix(Sound_Stereo, _INR(0,1), 3, 0);
+        flexisound_play(game->sound.bombed, 3, 0x17f, 0x1800);
+      }
+    }
+    if (game->shield <= 0) game->state = gamestate_DIED;
+    return 0;
+  } else enemy->statecounter--;
+  return 1;
+}
+
+int powerup_idle(void* game_p, void* enemy_p)
+{
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+
+  if (enemy->statecounter==0)
+  {
+    qrand(enemy->speed.x, 48);
+    qrand(enemy->speed.y, 48);
+    enemy->statecounter = 333;
+  } else enemy->statecounter--;
+
+  if (enemy->energy>990) enemy->whiteout = 10; // no display routine I don't think
+
+  return enemy->energy<1000;  // disappear after 10 secs
+}
+
+int mothership_idle(void* game_p, void* enemy_p)
+{
+  gameinfo* game = (gameinfo*) game_p;
+  enemyinfo* enemy = (enemyinfo*) enemy_p;
+  point2d pos;
+  pos.x = (16384-game->scene->offset.x)&32767;
+  pos.y = (16384-game->scene->offset.y)&32767;
+  if (toscreen(game->scene, &pos, &pos) && atcentreof(game, enemy, &pos))
+  {
+    if (enemy->distance > 32768)
+    {
+      enemy->distance -= 256;
+/*      enemy->speed.x = 0;
+      enemy->speed.y = 0;*/
+    }
+    else
+    {
+      if (properenemies(game->enemies)==0)
+        game->state = gamestate_FINALAPPROACH;
+      else
+        game->state = gamestate_REFUELDOCK;
+    }
+  }
+  else if (enemy->distance < 131072) enemy->distance += 256;
+
+  randomwalk(enemy, 25, 100, 4, 8);
+
+  return 1;
+}

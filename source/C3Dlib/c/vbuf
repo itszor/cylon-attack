@@ -1,0 +1,281 @@
+/*
+**    Name: vbuf.c
+**
+**    Date: Wed Sep 23 14:56:31 1998
+**
+*/
+
+#include <stdlib.h>
+#include <stdio.h>
+#include "C:kernel.h"
+#include "C:swis.h"
+
+#include "allocv.h"
+#include "primitive.h"
+#include "bucket.h"
+#include "vbuf.h"
+#include "utils.h"
+#include "plotter.h"
+#include "c3d.h"
+
+// Hardwires good old mode 13
+#define ARCHIMEDES 1
+
+// hmm... not sure how api I am with this bit of the API
+
+vbufinfo* c3d_newvbuf(int type, int x, int y, int bitdepth, int banks)
+{
+  vbufinfo* buf = c_new(vbufinfo);
+  matrix unit = {4096,0,0,0,4096,0,0,0,4096};
+  point zero = {0,0,0};
+
+  buf->pos = zero;
+  buf->orient = unit;
+  buf->polygonbuf = c_newarray(bpolygon, MAX_POLYGONS);
+  if (!buf->polygonbuf) { fprintf(stderr, "Can't get memory for polygons"); exit(1); }
+  buf->listbuf = c_newarray(blist, NUMBER_OF_BUCKETS);
+  if (!buf->listbuf) { fprintf(stderr, "Can't get memory for depth-sort buckets"); exit(1); }
+  buf->bank = 0;
+  buf->type = type;
+  // local pointer to global data
+  buf->dec = c3d_gfxdata;
+  buf->refreshcounter = 0;
+
+  switch (type)
+  {
+    case 0:
+    {
+      int modeblock[12];
+      switch (bitdepth)
+      {
+        case 8:  // 8bpp
+          modeblock[0] = 1;
+          modeblock[1] = x;
+          modeblock[2] = y;
+          modeblock[3] = 3;
+          modeblock[4] = -1;
+          modeblock[5] = 3;
+          modeblock[6] = 255;
+          modeblock[7] = 4;
+          modeblock[8] = 2;
+          modeblock[9] = 5;
+          modeblock[10] = 2;
+          modeblock[11] = -1;
+          buf->banksize = x*y;
+          break;
+
+        case 15:
+        case 16:  // 15/16bpp
+          modeblock[0] = 1;
+          modeblock[1] = x;
+          modeblock[2] = y;
+          modeblock[3] = 4;
+          modeblock[4] = -1;
+          modeblock[5] = 4;
+          modeblock[6] = 2;
+          modeblock[7] = 5;
+          modeblock[8] = 2;
+          modeblock[9] = -1;
+          buf->banksize = x*y*2;
+          break;
+
+        case 24:
+        case 32:   // 24/32bpp
+          modeblock[0] = 1;
+          modeblock[1] = x;
+          modeblock[2] = y;
+          modeblock[3] = 5;
+          modeblock[4] = -1;
+          modeblock[5] = 4;
+          modeblock[6] = 2;
+          modeblock[7] = 5;
+          modeblock[8] = 2;
+          modeblock[9] = -1;
+          buf->banksize = x*y*4;
+          break;
+      }
+#ifdef ARCHIMEDES
+      _swix(256+22, 0);
+      _swix(256+13, 0);
+#else
+      _swi(OS_ScreenMode, _INR(0,1), 0, modeblock);
+#endif
+      c3d_removecursors();
+      // change this just as soon as anything else will work with different parameters
+/*      if (x!=320 || y!=256 || bitdepth!=8)
+      {
+        free(buf);
+        fprintf(stderr, "Unsupported visual size/depth\n");
+        return 0;
+      }*/
+      buf->numbanks = banks;
+//      c3d_allocatescreenbanks(banks);  // try to allocate 'banks' screen banks
+      if (c3d_allocatescreenbanks(banks) != banks)
+      {
+        fprintf(stderr, "Can't allocate screen banks\n");
+        exit(1);
+      }
+      buf->buffer.screenbase = c3d_getscreenbase();
+      buf->bank = 0;
+      buf->bitdepth = bitdepth;
+      buf->size.x = x;
+      buf->size.y = y;
+    }
+    break;
+
+    case 1:
+    {
+      int estsize = x*y*((bitdepth+7)/8)+1024;
+      // complain about things
+      if (x!=320 || y!=256 || bitdepth!=8)
+      {
+        free(buf);
+        fprintf(stderr, "Unsupported image size/bit depth\n");
+        return 0;
+      }
+      buf->buffer.pixmap = malloc(estsize);
+      buf->buffer.pixmap[0] = estsize;
+      buf->buffer.pixmap[1] = 0;
+      buf->buffer.pixmap[2] = 16;
+      buf->buffer.pixmap[3] = 16;
+      _swi(OS_SpriteOp, _INR(0,1), 256+9, buf->buffer.pixmap);  // Initialise sprite area
+      _swi(OS_SpriteOp, _INR(0,6), 256+15, buf->buffer.pixmap, "view", 0, x, y, 0x201680B5);
+      buf->numbanks = 1;
+      buf->banksize = x*y*((bitdepth+7)/8);
+      buf->bank = 0;
+    }
+    break;
+
+    default:
+    free(buf);
+    fprintf(stderr, "Unrecognized buffer type\n");
+    return 0;
+  }
+
+  return buf;
+}
+
+void c3d_freevbuf(vbufinfo* buf)
+{
+  if (buf->type == 1) free(buf->buffer.pixmap);
+  free(buf->listbuf);
+  free(buf->polygonbuf);
+  free(buf);
+}
+
+// initialise a frame before putting any polygons in it
+
+void c3d_startframe(vbufinfo* buf)
+{
+  // empty buckets
+  c3d_initlist(buf->listbuf);
+  buf->refreshcounter++;
+}
+
+void c3d_endframe(vbufinfo* buf)
+{
+  switch (buf->type)
+  {
+    case 0:
+    c3d_render(buf->listbuf, buf->polygonbuf, buf->dec,
+               &buf->buffer.screenbase[(1-buf->bank)*20480]);
+    break;
+
+    case 1:
+    {
+      int* pixmap, offset;
+      // could be cached, but speed probably unimportant anyway if we're plotting to a sprite...
+      offset = _swi(OS_SpriteOp, _INR(0,1) | _RETURN(4), 256+8, buf->buffer.pixmap);
+      pixmap = (int*) ((int) buf->buffer.pixmap) + offset;
+      pixmap = (int*) ((int) pixmap) + pixmap[8];
+      c3d_render(buf->listbuf, buf->polygonbuf, buf->dec, pixmap);
+    }
+    break;
+  }
+}
+
+void c3d_displayframe(vbufinfo* buf)
+{
+  switch (buf->type)
+  {
+    case 0:
+    {
+      int display;
+      // use buffers cyclically; always display frame one frame behind the one being written to
+      buf->bank++;
+      if (buf->bank >= buf->numbanks) buf->bank = 0;
+      display = buf->bank == 0 ? buf->numbanks-1 : buf->bank-1;
+      c3d_setscreenbanks(display, buf->bank);
+    }
+    break;
+
+    default:
+    fprintf(stderr, "Don't know how to display this type of view buffer\n");
+    break;
+  }
+}
+
+// Add a single polygon to the scene
+// (no longer even remotely efficient, by the look of it)
+
+void c3d_addpoly(vbufinfo* buf, polygon* p, point* light, point* viewer)
+{
+  bpolygon* newp;
+  int depth = 0;
+  int loop;
+  int shift=1000;
+
+  for (loop=0; loop<p->edges; loop++)
+    depth += p->pt[loop]->transformed.z;
+
+  depth /= p->edges;
+
+  if ((p->edges == 4 &&
+      c3d_checkorder(&p->pt[0]->transformed, &p->pt[1]->transformed,
+                     &p->pt[2]->transformed, &p->pt[3]->transformed)) ||
+      (p->edges == 3 &&
+      c3d_checkorder3(&p->pt[0]->transformed, &p->pt[1]->transformed,
+                      &p->pt[2]->transformed)))
+  {
+    newp = c3d_addtoview(buf->listbuf, buf->polygonbuf, (depth+shift)>>8);
+    if (newp)
+    {
+      int loop;
+
+      newp->type = 4-p->edges;
+      if (buf->bitdepth == 24) newp->type |= 4;
+      newp->texture = p->texture;
+
+      for (loop=0; loop<p->edges; loop++)
+      {
+        int dp;
+        point ndp;
+        newp->coord.point[loop].x = p->pt[loop]->transformed.x;
+        newp->coord.point[loop].y = p->pt[loop]->transformed.y;
+//        printf("x=%d, y=%d  ", poly[loop]->x, poly[loop]->y);
+//        newp->depth[loop]=(p->pt[loop]->transformed.z+diff)>>5;
+        dp = (p->normal[loop].x*light->x+
+              p->normal[loop].y*light->y+
+              p->normal[loop].z*light->z) >> 12;
+        ndp.x = p->normal[loop].x * dp;
+        ndp.y = p->normal[loop].y * dp;
+        ndp.z = p->normal[loop].z * dp;
+        ndp.x = (ndp.x >> 11) - light->x;
+        ndp.y = (ndp.y >> 11) - light->y;
+        ndp.z = (ndp.z >> 11) - light->z;
+        dp = (ndp.x*viewer->x + ndp.y*viewer->y + ndp.z*viewer->z) >> 12;
+        if (dp>0)
+        {
+          dp = (dp*dp) >> 12;
+//          dp = (dp*dp) >> 12;
+          dp = (5*dp)/2;
+          newp->depth[loop] = dp>10239 ? 10239 : dp<0 ? 0 : dp;
+        }
+        else newp->depth[loop] = 0;
+        newp->tc[loop] = p->tex[loop];
+      }
+//      puts("");
+    }
+  }
+}
+

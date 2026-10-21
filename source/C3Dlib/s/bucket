@@ -1,0 +1,289 @@
+
+	GET C3Dlib:hdr.defs
+
+; bpolygon offsets
+poly_TYPE	EQU	0
+poly_TEXTURE	EQU	4
+poly_POINTS	EQU	8	; (8 words)
+;poly_POS	EQU	8	; for sprites (2 words)
+;poly_SCALE	EQU	16	; for sprites (2 words)
+poly_TEXCOORDS	EQU	40	; (8 words) - texture map
+poly_DEPTHS	EQU	72	; (4 words) - depths of vertices
+poly_SHADES	EQU	40	; (8 words) - gouraud
+poly_NEXT	EQU	88	; pointer to next polygon
+poly_SIZEOF	EQU	92	; total length
+
+
+	IMPORT c3d_texture
+	IMPORT c3d_texture3
+	IMPORT c3d_texture24
+;	IMPORT c3d_augpoly
+;	IMPORT c3d_gouraud
+	IMPORT c3d_screenbase
+	IMPORT c3d_fogclut
+
+
+	AREA |bucket$$data|, DATA
+
+polyptr DCD 0
+renderworkspace	% 32
+
+
+	AREA |bucket$$code|, CODE, READONLY
+
+	EXPORT c3d_render
+c3d_render
+	; entry parameters - r0 buckets
+	;		     r1 polygons
+	;		     r2 *(decorations struct)
+	;		     r3 screenbase
+	stmfd r13!,{r4-r12,r14}
+
+	adrl r4,c3d_screenbase
+	str r3,[r4]
+
+	; at some point, different polygons might want different colour tables
+	ldr r4,[r2,#24]		; first colour table?
+	adrl r5,c3d_fogclut
+	str r4,[r5]
+
+;	adrl r3,renderworkspace
+
+	mov r8,#NO_OF_BUCKETS
+
+render_cycle
+	subs r8,r8,#1			; (mov r8,#2047)
+	ldmltfd r13!,{r4-r12,pc}	; fast dropout
+
+	ldr r4,[r0,r8,lsl #3]		; r4 is start of polygon list
+
+render_continue
+	cmp r4,#0
+	beq render_cycle
+
+	ldr r5,[r4,#poly_TYPE]
+
+	stmfd r13!,{r0-r3}
+
+; other types of thing not supported atm
+	add pc,pc,r5,lsl #2
+	mov r0,r0
+	b type_texture		; 8bpp, quadrangles
+	b type_texture3		; 8bpp, triangles
+;	b type_bunch_of_particles
+;	b type_sprite
+;	b type_plain
+;	b type_gouraud
+	mov r0,r0		; padding
+	mov r0,r0
+	b type_texture24	; 24bpp, quadrangles
+
+type_texture
+	add r0,r4,#poly_POINTS		; input vertices +workspace
+	ldr r1,[r2,#0]			; textures
+	ldr r2,[r4,#poly_TEXTURE]	; texture number
+	mov r3,#5			; width of 32
+	bl c3d_texture
+
+	b render_nextpolygon
+
+type_texture3
+	add r0,r4,#poly_POINTS		; input vertices +workspace
+	ldr r1,[r2,#0]			; textures
+	ldr r2,[r4,#poly_TEXTURE]	; texture number
+	mov r3,#5			; width of 32
+	bl c3d_texture3
+
+	b render_nextpolygon
+
+	IMPORT texture2glue
+
+type_texture24
+	add r0,r4,#poly_POINTS		; input vertices
+	ldr r1,[r2,#0]			; textures
+	ldr r2,[r4,#poly_TEXTURE]	; texture number
+	mov r3,#7			; width of 32*4
+;	bl c3d_texture24
+	bl texture2glue
+
+	b render_nextpolygon
+
+type_plain
+;	add r0,r4,#poly_POINTS
+
+;	ldmia r0,{r0,r1,r5,r7,r9,r10,r11,r12}
+;	stmia r3,{r0,r1,r5,r7,r9,r10,r11,r12}
+
+;	mov r0,r3			; input vertices +workspace
+;	ldr r1,[r2,#4]			; patterns
+;	ldr r2,[r4,#poly_TEXTURE]	; pattern number
+;	bl c3d_augpoly
+
+;	b render_nextpolygon
+
+type_gouraud
+;	add r0,r4,#poly_POINTS
+
+;	ldmia r0,{r0,r1,r5,r7,r9,r10,r11,r12}
+;	stmia r3,{r0,r1,r5,r7,r9,r10,r11,r12}
+
+;	mov r0,r3			; input vertices +workspace
+;	ldr r1,[r2,#8]			; gouraud-shades
+;	ldr r2,[r4,#poly_TEXTURE]	; gouraud colour number
+;	add r3,r4,#poly_SHADES
+;	bl c3d_gouraud
+
+;	b render_nextpolygon
+
+type_sprite
+;	b render_nextpolygon
+
+render_nextpolygon
+	ldmfd r13!,{r0-r3}
+
+	ldr r4,[r4,#poly_NEXT]		; go to next in list
+	b render_continue
+
+	ldmfd r13!,{r4-r12,pc}
+
+
+
+	EXPORT c3d_initlist
+c3d_initlist
+	; entry parameters - r0 pointer to bucket array
+	stmfd r13!,{r4-r9,r14}
+
+	mov r1,#0
+	mov r2,#0
+	mov r3,#0
+	mov r4,#0
+	mov r5,#0
+	mov r6,#0
+	mov r7,#0
+	mov r8,#0
+
+	mov r9,#NO_OF_BUCKETS/4
+clearbufferfillloop
+	stmia r0!,{r1-r8}
+	subs r9,r9,#1
+	bgt clearbufferfillloop
+
+	adrl r0,polyptr
+	str r1,[r0]
+
+	ldmfd r13!,{r4-r9,pc}
+
+
+
+	EXPORT c3d_addtoview
+c3d_addtoview
+	; entry parameters - r0 pointer to bucket array
+	;		     r1 pointer to polygon array
+	;		     r2 approx depth
+	; returns	     r0 pointer to new polygon
+	stmfd r13!,{r4-r5,r14}
+
+	cmp r2,#NO_OF_BUCKETS
+	movhs r0,#0		; 0=exit failure
+	ldmhsfd r13!,{r4-r5,pc} ; fail if too close or far away
+
+	add r2,r0,r2,lsl #3	; new *bucket is 'r2'
+
+	adrl r5,polyptr		; claim poly_SIZEOF bytes for polygon 'r4'
+	ldr r3,[r5]
+	add r4,r1,r3		; r4 points to NEW polygon
+	add r3,r3,#poly_SIZEOF
+	str r3,[r5]
+
+	ldr r5,[r2,#0]		; if bucket!0=0,
+	cmp r5,#0
+	streq r4,[r2,#0]	; set 'first polygon' to point to new polygon
+
+	mov r5,#0		; set the polygon.next of the new polygon to 0
+	str r5,[r4,#poly_NEXT]
+
+	ldr r5,[r2,#4]		; get previous *lastpolygon
+	cmp r5,#0		; don't do it if this is the first polygon
+	strne r4,[r5,#poly_NEXT]; set *nextpolygon of previous polygon to new *polygon
+
+	str r4,[r2,#4]		; set *lastpolygon to new polygon
+
+	mov r0,r4		; ** address of polygon **
+
+	ldmfd r13!,{r4-r5,pc}
+
+
+	EXPORT c3d_onscreen
+
+c3d_onscreen
+	stmfd r13!,{r4-r6,r14}
+	mov r6,#15		; visible by default
+	ldmia r0,{r4,r5}
+	cmp r4,#size_x
+	bichs r6,r6,#1
+	cmp r5,#size_y
+	bichs r6,r6,#1
+	ldmia r1,{r4,r5}
+	cmp r4,#size_x
+	bichs r6,r6,#2
+	cmp r5,#size_y
+	bichs r6,r6,#2
+	ldmia r2,{r4,r5}
+	cmp r4,#size_x
+	bichs r6,r6,#4
+	cmp r5,#size_y
+	bichs r6,r6,#4
+	ldmia r3,{r4,r5}
+	cmp r4,#size_x
+	bichs r6,r6,#8
+	cmp r5,#size_y
+	bichs r6,r6,#8
+	mov r0,r6
+	ldmfd r13!,{r4-r6,pc}
+
+
+	EXPORT c3d_checkorder
+
+c3d_checkorder
+	stmfd r13!,{r4-r12,r14}
+	ldmia r0,{r4,r5}		; pt0
+	ldmia r1,{r6,r7}		; pt1
+	add r8,r4,r6
+	sub r9,r5,r7
+	mul r12,r8,r9			; r12 area accumulator
+	ldmia r2,{r10,r11}		; pt2
+	add r8,r6,r10
+	sub r9,r7,r11
+	mla r12,r8,r9,r12
+	ldmia r3,{r6,r7}		; pt3
+	add r8,r10,r6
+	sub r9,r11,r7
+	mla r12,r8,r9,r12
+	add r8,r6,r4
+	sub r9,r7,r5
+	mlas r12,r8,r9,r12
+	movlt r0,#1
+	movge r0,#0
+	ldmfd r13!,{r4-r12,pc}
+
+	EXPORT c3d_checkorder3
+
+c3d_checkorder3
+	stmfd r13!,{r4-r12,r14}
+	ldmia r0,{r4,r5}		; pt0
+	ldmia r1,{r6,r7}		; pt1
+	add r8,r4,r6
+	sub r9,r5,r7
+	mul r12,r8,r9			; r12 area accumulator
+	ldmia r2,{r10,r11}		; pt2
+	add r8,r6,r10
+	sub r9,r7,r11
+	mla r12,r8,r9,r12
+	add r8,r10,r4
+	sub r9,r11,r5
+	mlas r12,r8,r9,r12
+	movlt r0,#1
+	movge r0,#0
+	ldmfd r13!,{r4-r12,pc}
+
+	END

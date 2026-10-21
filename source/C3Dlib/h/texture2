@@ -1,0 +1,23 @@
+// texture2.h
+
+#ifndef C3D_TEXTURE2_H
+#define C3D_TEXTURE2_H 1
+
+#include "primitive.h"
+#include "vbuf.h"
+#include "plotter.h"
+
+typedef struct {
+  int top, height, xstart, xdelta;
+  int u, v, lightness, depth, udelta, vdelta, lightdelta, depthdelta;
+} edge;
+
+typedef struct {
+  point2d size;
+  int* data;
+} textureinfo;
+
+void texture2glue(coords* in, int* tex, int num, int width);
+void texture2(vbufinfo* vbuf, polygon* poly, textureinfo* tex);
+
+#endif

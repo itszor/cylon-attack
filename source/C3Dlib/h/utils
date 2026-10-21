@@ -1,0 +1,24 @@
+/*
+**    Name: utils.h
+**
+**    Date: Wed Sep 23 21:59:03 1998
+**
+*/
+
+#ifndef C3D_UTILS_H
+#define C3D_UTILS_H 1
+
+void c3d_setpalette(int* pal);
+int* c3d_loadfile(char* pathname);
+void c3d_screenmode(int);
+void c3d_removecursors(void);
+int* c3d_getscreenbase(void);
+int c3d_allocatescreenbanks(int number);
+void c3d_setscreenbanks(int display, int writeto);
+void c3d_resetscreen(int* buffer);
+void c3d_clearbank(int* buffer);
+void c3d_getmouse(int* x, int* y, int* buttons);
+int c3d_keydown(int keynum);
+int c3d_gettime(void);
+
+#endif

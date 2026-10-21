@@ -1,0 +1,40 @@
+
+	GET C3Dlib:hdr.defs
+
+	GET C3Dlib:s.texpreamble
+
+	AREA |TextureMap$$Code|, CODE, READONLY
+
+	MACRO
+	FILLER
+;	mov r7,r7,lsl #2	; multiply by 4
+	bic r7,r7,#3
+1	; fill_loop
+	mov r1,r9,asr #16	; fill pixels a word at a time
+	add r1,r3,r1,asl r14
+	mov r2,r10,asr #16
+	ldr r2,[r1,r2,lsl #2]
+	; shade here...
+;	mov r4,r5,asr #16
+;	add r4,r0,r4,asl #8
+;	ldrb r2,[r4,r2]
+;	add r5,r5,r6
+	add r9,r9,r11
+	add r10,r10,r12
+
+	mov r2,#255
+	orr r2,r2,r2,lsl #16
+	orr r2,r2,r2,lsl #8
+
+	str r2,[r7],#4
+
+	subs r8,r8,#1
+	bgt %b1		; fill_loop
+	MEND
+
+	EXPORT c3d_texture24
+c3d_texture24
+	GET C3Dlib:s.texturecore
+
+
+	END

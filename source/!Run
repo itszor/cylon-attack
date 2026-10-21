@@ -1,0 +1,7 @@
+set cylon$dir <obey$dir>
+set cylon$path <cylon$dir>.
+set c3dres$path <cylon$dir>.c3dres.
+RMEnsure FlexiSound 1.11 RMLoad <Cylon$Dir>.FlexiSound
+RMEnsure FlexiSound 1.11 Error This program needs FlexiSound 1.11 to run
+wimpslot -min 512k -max 512k
+run <cylon$dir>.!RunImage

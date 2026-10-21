@@ -1,0 +1,51 @@
+;
+;   Cylon Attack - The Onslaught Continues!  A 2D space game
+;   Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+;
+;   This program is free software; you can redistribute it and/or modify
+;   it under the terms of the GNU General Public License as published by
+;   the Free Software Foundation; either version 2 of the License, or
+;   (at your option) any later version.
+;
+;   This program is distributed in the hope that it will be useful,
+;   but WITHOUT ANY WARRANTY; without even the implied warranty of
+;   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;   GNU General Public License for more details.
+;
+;   You should have received a copy of the GNU General Public License
+;   along with this program; if not, write to the Free Software
+;   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+; This code doesn't work and isn't used...
+
+	AREA |C$$code|, CODE, READONLY
+
+	IMPORT updatestatus
+
+preemptiveupdateglue
+;	stmfd r13!,{r0-r12,r14}
+	cmp r12,#42
+	movnes pc,r14
+	stmfd r13!,{r0-r12,r14}
+	bleq updatestatus
+	ldmfd r13!,{r0-r12,pc}^
+
+
+	EXPORT initglue
+initglue
+	mov r0,#&1C
+	adr r1,preemptiveupdateglue
+	mov r2,#42
+	swi &1F		; OS_Claim
+	movs pc,r14
+
+
+	EXPORT freeglue
+freeglue
+	mov r0,#&1C
+	adr r1,preemptiveupdateglue
+	mov r2,#42
+	swi &20		; OS_Release
+	movs pc,r14
+
+	END

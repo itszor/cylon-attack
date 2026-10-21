@@ -1,0 +1,104 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+
+#include <stdlib.h>
+
+#include "scene.h"
+#include "fmath.h"
+#include "smoothpoint.h"
+#include "utils.h"
+#include "scale.h"
+
+const point2d MESSAGESIZES[] =
+{ {100,9},
+  {40,9},
+  {52,9},
+  {296,24},
+  {88,9}
+};
+
+const point2d MISCSIZES[] =
+{ {8,12},
+  {64,64},
+  {64,64},
+  {64,64}
+};
+
+sceneinfo* newscene(void)
+{
+  sceneinfo* scene = malloc(sizeof(sceneinfo));
+  int i;
+
+/*  c3d_allocatescreenbanks(2);
+  scene->screenbase = c3d_getscreenbase();*/
+  scene->bank = 0;
+
+  scene->numstars = NUMSTARS;
+  scene->stars = calloc(NUMSTARS, sizeof(point2d));
+  scene->intens = calloc(NUMSTARS, sizeof(int));
+  scene->offset.x = scene->offset.y = 0;
+
+  for (i=0; i<NUMSTARS; i++)
+  {
+    scene->stars[i].x = rand()&32767;
+    scene->stars[i].y = rand()&32767;
+    scene->intens[i] = rand()&255;
+  }
+
+  return scene;
+}
+
+// returns true if on-screen
+
+int toscreen(sceneinfo* scene, point2d* o, point2d* i)
+{
+  int x,y;
+  x=((scene->offset.x+i->x)&32767)-16384;
+  y=((scene->offset.y+i->y)&32767)-16384;
+  if (x>-6000 & x<6000 && y>-4500 && y<4500)
+  {
+    int z = 40000-fsqrt(x*x+y*y);
+    o->x = 2560+(16384*x)/z;
+    o->y = 2048+(16384*y)/z;
+    return 1;
+  }
+  return 0;
+}
+
+void plotscene(sceneinfo* scene)
+{
+  int i;
+  point2d o;
+
+  for (i=3; i<NUMSTARS; i++)
+  {
+    if (toscreen(scene, &o, &scene->stars[i]))
+      smoothpoint(scene->buffer, o.x, o.y, scene->intens[i]);
+  }
+  for (i=0; i<3; i++)
+  {
+    if (toscreen(scene, &o, &scene->stars[i]))
+    {
+      o.x=(o.x>>4)-32;
+      o.y=(o.y>>4)-32;
+      m_XxY(scene->buffer, scene->bitmaps.misc[i+1], &o, &MISCSIZES[i+1]);
+    }
+  }
+}

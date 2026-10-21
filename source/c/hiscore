@@ -1,0 +1,90 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include "swis.h"
+
+#include "c3d.h"
+
+#include "scene.h"
+#include "game.h"
+#include "scale.h"
+#include "hiscore.h"
+
+void drawhiscores(gameinfo* game, int index)
+{
+  int i;
+
+  for (i=0; i<8; i++)
+  {
+    int j = i+index;
+    plottext(game, -1, 5+i*30, "%d %c%c%c %06d0", j+1,
+             game->hiscores[j].initials[0], game->hiscores[j].initials[1],
+             game->hiscores[j].initials[2], game->hiscores[j].score);
+  }
+}
+
+void insertscore(gameinfo* game, int score)
+{
+  int pos, copy, init=0;
+
+  for (pos=0; pos<24 && game->hiscores[pos].score>score; pos++);
+  if (pos==24) return;
+  for (copy=23; copy>=pos; copy--) game->hiscores[copy+1]=game->hiscores[copy];
+
+  game->hiscores[pos].score = score;
+  strncpy(game->hiscores[pos].initials, "   ", 3);
+
+  drawhiscores(game, pos&~7);
+
+  // this allegedly clears the keyboard buffer.
+  rewind(stdin);
+
+  while (1)
+  {
+    int ch, tm;
+    // return ASCII character from keyboard in 'ch'.
+    _swix(OS_Byte, _INR(0,2) | _OUTR(1,2), 129, 10, 0, &ch, &tm);
+    if (tm==0)
+    {
+      ch = toupper(ch);
+      if (isalnum(ch) || ch==' ')
+      {
+        game->hiscores[pos].initials[init] = ch;
+        // duh.
+        drawhiscores(game, pos&~7);
+        if (init<3) init++;
+      }
+      if (ch==127 || ch==8)
+      {
+        if (init>0)
+        {
+          game->hiscores[pos].initials[--init] = ' ';
+          // euck.
+          c3d_clearbank(game->scene->buffer);
+          drawhiscores(game, pos&~7);
+        }
+      }
+      if (ch==13 || ch==10) break;
+    }
+  }
+}

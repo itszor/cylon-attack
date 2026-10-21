@@ -1,0 +1,40 @@
+/*
+**    Name: list.h
+**
+**    Date: Wed Sep 16 23:20:08 1998
+**
+*/
+
+#ifndef C3D_LIST_H
+#define C3D_LIST_H 1
+
+struct list {
+  void* data;
+  struct list* prev;
+  struct list* next;
+};
+
+typedef struct list list;
+
+
+/* Auto */
+
+extern void c3d_list_add(list** oldhead)
+;
+extern void c3d_list_removehead(list** head)
+;
+extern // Delinks an item without freeing its data pointer */
+void c3d_list_delinkitem(list** head, list* item)
+;
+extern void c3d_list_delinkitem(list** head, list* item)
+;
+extern list* c3d_list_itemfromdata(list* li, void* data)
+;
+extern void c3d_list_destroy(list* li)
+;
+extern list* c3d_list_nthitem(list* li, int item)
+;
+extern int c3d_list_length(list* head)
+;
+
+#endif

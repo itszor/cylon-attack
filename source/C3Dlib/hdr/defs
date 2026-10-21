@@ -1,0 +1,24 @@
+
+size_x		EQU	320
+size_y		EQU	256
+
+; (2^shift_1) + (2^shift_2) == size_x
+shift_1		EQU	8
+shift_2		EQU	6
+
+centre_x	EQU	size_x/2
+centre_y	EQU	size_y/2
+
+; scale factor of coords after perspective transformation
+; guide: 13=full screen (320x256), 14=1/4 screen (160x128)
+shrink_fac	EQU	13
+
+; use shading in texture mapper
+shade		EQU	1
+
+; use dithering in gouraud shader
+dither		EQU	0
+
+NO_OF_BUCKETS	EQU	6144
+
+	END

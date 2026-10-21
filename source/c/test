@@ -1,0 +1,693 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "swis.h"
+
+#include "c3d.h"
+
+#include "smoothpoint.h"
+#include "scene.h"
+#include "utils.h"
+#include "game.h"
+#include "scale.h"
+#include "enemy.h"
+#include "levels.h"
+#include "sound.h"
+#include "console.h"
+#include "preemptglue.h"
+#include "rectangle.h"
+#include "title.h"
+
+// This just crashes horribly
+//#define PREEMPTIVE_UPDATE 1
+#undef PREEMPTIVE_UPDATE
+
+soundinfo* global_soundinfo=0;
+gameinfo* global_game;
+int preempt_running=0;
+
+void updatestatus(void);
+
+void tidysound(void)
+{
+  if (global_soundinfo)
+  {
+    flexisound_remove(global_soundinfo->launch);
+    flexisound_remove(global_soundinfo->dock);
+    flexisound_remove(global_soundinfo->bombed);
+    flexisound_remove(global_soundinfo->deflect);
+    flexisound_remove(global_soundinfo->wobble);
+    flexisound_remove(global_soundinfo->laser);
+    flexisound_remove(global_soundinfo->explosion);
+    flexisound_remove(global_soundinfo->dud);
+  }
+
+#ifdef PREEMPTIVE_UPDATE
+  if (preempt_running) freeglue();
+#endif
+}
+
+int* loadandconvertsprites(char* pathname, int bytesize, int num)
+{
+  int *spr1, *sprdat, *dest, *temp, i;
+
+  dest = malloc(bytesize*num);
+  temp = c3d_loadfile(pathname);
+  spr1 = (int*)((int)temp+temp[1]-4);
+
+  for (i=0; i<num; i++)
+  {
+    sprdat = (int*)((int)spr1+spr1[8]);
+    memcpy(&dest[i*bytesize/4], sprdat, bytesize);
+    spr1 = (int*)((int)spr1+spr1[0]);
+  }
+
+  free(temp);
+
+  return dest;
+}
+
+void loadandconvertvsprites(char* pathname, const point2d sizes[], int *bases[], int num)
+{
+  int *spr1, *sprdat, *temp, i, bytesize;
+
+  temp = c3d_loadfile(pathname);
+  spr1 = (int*)((int)temp+temp[1]-4);
+
+  for (i=0; i<num; i++)
+  {
+    bytesize = sizes[i].x*sizes[i].y;
+    bases[i] = malloc(bytesize);
+    sprdat = (int*)((int)spr1+spr1[8]);
+    memcpy(bases[i], sprdat, bytesize);
+    spr1 = (int*)((int)spr1+spr1[0]);
+  }
+
+  free(temp);
+}
+
+#define GFXPREFIX "Cylon:gfx."
+#define SOUNDPREFIX "Cylon:sound."
+#define OBJECTPREFIX "Cylon:objects."
+
+int* bank(sceneinfo* scene, int bank)
+{
+  // yuk yuk yuk
+  return &scene->viewbuf->buffer.screenbase[bank*20480];
+}
+
+// cheesy macros
+#define START(D,N) { bit = 0; total = (N); printf(D); }
+#define DO(X) { X; printf("\r%d%% complete", (100*(++bit))/total); }
+#define END() putchar('\n')
+
+int main(void)
+{
+//  int sc=0;
+//  int modeblock[] = {1,320,256,3,-1,4,2,5,2,-1};
+  sceneinfo* scene;
+  gameinfo* game;
+  int timenow, timethen;
+  int bit, total;
+
+  c3d_initialise("C3Dres:");
+
+/*  _swi(OS_ScreenMode, _INR(0,1), 0, modeblock);*/
+
+  puts("Starting game...");
+  game = newgame();
+  scene = game->scene;
+
+  START("Loading graphics\n", 21);
+  DO(scene->bitmaps.backdrop = loadandconvertsprites(GFXPREFIX"backdrop", 320*256, 1));
+  DO(scene->bitmaps.alien = loadandconvertsprites(GFXPREFIX"aliens", 64*64, 3));
+  DO(scene->bitmaps.mothership = loadandconvertsprites(GFXPREFIX"mothership", 64*64, 36));
+  DO(scene->bitmaps.saucer = loadandconvertsprites(GFXPREFIX"saucer", 64*64, 72));
+  DO(scene->bitmaps.shell = loadandconvertsprites(GFXPREFIX"shell", 64*64, 72));
+  DO(scene->bitmaps.bomb = loadandconvertsprites(GFXPREFIX"bomb", 32*16, 4));
+  DO(scene->bitmaps.bomb1 = loadandconvertsprites(GFXPREFIX"bombs1", 32*16, 16));
+  DO(scene->bitmaps.bomb2 = loadandconvertsprites(GFXPREFIX"bombs2", 32*16, 16));
+  DO(scene->bitmaps.xhair = loadandconvertsprites(GFXPREFIX"xhairs", 48*32, 4));
+  DO(scene->bitmaps.digit = loadandconvertsprites(GFXPREFIX"numbers", 16*24, 10));
+  DO(scene->bitmaps.letter = loadandconvertsprites(GFXPREFIX"lettersp", 16*24, 26));
+  DO(scene->bitmaps.explo = loadandconvertsprites(GFXPREFIX"explo", 120*112, 50));
+  DO(scene->bitmaps.powerup[0] = loadandconvertsprites(GFXPREFIX"powerup1", 32*16, 16));
+  DO(scene->bitmaps.powerup[1] = loadandconvertsprites(GFXPREFIX"powerup2", 32*16, 16));
+  DO(scene->bitmaps.powerup[2] = loadandconvertsprites(GFXPREFIX"powerup3", 32*16, 16));
+  DO(scene->bitmaps.powerup[3] = loadandconvertsprites(GFXPREFIX"powerup4", 32*16, 16));
+  DO(loadandconvertvsprites(GFXPREFIX"messages", MESSAGESIZES, scene->bitmaps.message, 5));
+  DO(loadandconvertvsprites(GFXPREFIX"misc", MISCSIZES, scene->bitmaps.misc, 4));
+  DO(scene->consoledata = c3d_loadfile(GFXPREFIX"cons"));
+  DO(c3d_gfxdata->textures = c3d_loadfile(GFXPREFIX"textures"));
+  DO(c3d_gfxdata->tables[0] = c3d_loadfile(GFXPREFIX"colours"));
+  END();
+
+  START("Loading sounds\n", 8);
+  DO(game->sound.dud = flexisound_add(SOUNDPREFIX"dud", 0));
+  DO(game->sound.explosion = flexisound_add(SOUNDPREFIX"explosion", 0));
+  DO(game->sound.laser = flexisound_add(SOUNDPREFIX"laser", 0));
+  DO(game->sound.wobble = flexisound_add(SOUNDPREFIX"wobble", 1));
+  DO(game->sound.deflect = flexisound_add(SOUNDPREFIX"deflect", 0));
+  DO(game->sound.bombed = flexisound_add(SOUNDPREFIX"bombed", 0));
+  DO(game->sound.dock = flexisound_add(SOUNDPREFIX"dock", 0));
+  DO(game->sound.launch = flexisound_add(SOUNDPREFIX"launch", 0));
+  global_soundinfo = &game->sound;
+  global_game = game;
+  END();
+
+  // Do we trust atexit to do our dirty work for us? Of course we do...
+  atexit(tidysound);
+
+  START("Loading objects\n", 12);
+  DO(scene->mothership = c3d_loadobject(OBJECTPREFIX"mother"));
+  DO(scene->letters.large.c = c3d_loadobject(OBJECTPREFIX"lc"));
+  DO(scene->letters.large.y = c3d_loadobject(OBJECTPREFIX"ly"));
+  DO(scene->letters.large.l = c3d_loadobject(OBJECTPREFIX"ll"));
+  DO(scene->letters.large.o = c3d_loadobject(OBJECTPREFIX"lo"));
+  DO(scene->letters.large.n = c3d_loadobject(OBJECTPREFIX"ln"));
+  DO(scene->letters.small.a = c3d_loadobject(OBJECTPREFIX"sa"));
+  DO(scene->letters.small.t = c3d_loadobject(OBJECTPREFIX"st"));
+  // an unfortunate little feature of C3Dlib is that it's not possible
+  // to have more than one version of an object in the same scene. This
+  // restriction has therefore been hacked around.
+  DO(scene->letters.small.t2 = c3d_loadobject(OBJECTPREFIX"st"));
+  DO(scene->letters.small.a2 = c3d_loadobject(OBJECTPREFIX"sa"));
+  DO(scene->letters.small.c = c3d_loadobject(OBJECTPREFIX"sc"));
+  DO(scene->letters.small.k = c3d_loadobject(OBJECTPREFIX"sk"));
+  END();
+
+  c3d_scaleobject(scene->letters.large.c, 16);
+  c3d_scaleobject(scene->letters.large.y, 16);
+  c3d_scaleobject(scene->letters.large.l, 16);
+  c3d_scaleobject(scene->letters.large.o, 16);
+  c3d_scaleobject(scene->letters.large.n, 16);
+  c3d_scaleobject(scene->letters.small.a, 16);
+  c3d_scaleobject(scene->letters.small.t, 16);
+  c3d_scaleobject(scene->letters.small.t2, 16);
+  c3d_scaleobject(scene->letters.small.a2, 16);
+  c3d_scaleobject(scene->letters.small.c, 16);
+  c3d_scaleobject(scene->letters.small.k, 16);
+
+  puts("Initialising scenery...");
+  smoothptinit();
+
+  puts("Initialising view buffer...");
+  scene->viewbuf = c3d_newvbuf(0, 320, 256, 8, 2);
+
+  for (;;)
+  {
+    scene->buffer = scene->viewbuf->buffer.screenbase;
+
+    c3d_clearbank(scene->buffer);
+
+/*    plottext(game, -1, 40, "CYLON ATTACK");
+    plottext(game, -1, 80, "THE");
+    plottext(game, -1, 105, "ONSLAUGHT CONTINUES");
+    plottext(game, -1, 190, "HIT SPACE TO PLAY");
+
+    while (!c3d_keydown(-99));
+    while (c3d_keydown(-99));*/
+
+    titlesequence(game);
+
+    initlevel(game);
+
+  #ifdef PREEMPTIVE_UPDATE
+    initglue();
+    preempt_running=1;
+  #endif
+
+    timethen=timenow=c3d_gettime();
+
+    while (game->state != gamestate_EXIT)
+    {
+      int i;
+  /*
+      _swi(OS_Byte, _IN(0), 19);
+      c3d_setscreenbanks(sc, 1-sc);
+      scene->bank = sc = 1-sc;
+  */
+      // C3Dlib worries about switching bank
+
+      switch (game->state)
+      {
+        case gamestate_IDLE:
+        case gamestate_FIRING:
+        case gamestate_READYTODOCK:
+
+        scene->buffer = bank(scene, 1-scene->viewbuf->bank);
+
+        c3d_clearbank(scene->buffer);
+        plotscene(scene);
+        plotenemies(game);
+        plotlaser(game);
+        plotconsole(scene->buffer, scene->consoledata);
+        plotstuff(game);
+        plotxhair(game, 1);
+        plotscore(game);
+
+        if (game->explostate>0 && (game->explostate&7)>3)
+        {
+          // red-out screen a bit
+          ormem(scene->buffer, 0x16161616);
+        }
+
+        c3d_displayframe(scene->viewbuf);
+
+#ifndef PREEMPTIVE_UPDATE
+        timethen=timenow;
+        timenow=c3d_gettime();
+        for (i=0; i<(timenow-timethen); i++) updatestatus();
+#endif
+        if (game->msshield<=0) game->state = gamestate_DIED;
+        break;
+
+        case gamestate_REFUELDOCK:
+        case gamestate_FINALAPPROACH:
+        {
+          enemyinfo* enemy;
+          list* item;
+          point2d pos;
+          int mod144 = game->ticker % 144;
+          int a;
+
+          // foo.
+          for (item = game->enemies; item; item=item->prev)
+          {
+            enemy = (enemyinfo*) item->data;
+            if (enemy->type == enemytype_MOTHERSHIP) break;
+          }
+
+          // make tha dock noise, and kill the repeat
+          flexisound_play(game->sound.dock, 4, 0x17f, 0x1000);
+
+          toscreen(game->scene, &pos, &enemy->pos);
+
+          while (enemy->distance>256)
+          {
+            matrix orient = {4096,0,0,0,0,-4096,0,4096,0}, orient2, rot;
+            point around = {0, 0, 256}, zero = {0, 0, 256*256};
+
+            c3d_generatematrix(&rot, &around, (mod144*2048)/36);
+            zero.z = enemy->distance*6;
+            zero.x = (pos.x-16*160)*84;
+            zero.y = (16*128-pos.y)*84;
+
+            scene->buffer = bank(scene, 1-scene->viewbuf->bank);
+
+            c3d_clearbank(scene->buffer);
+
+            plotscene(scene);
+
+            c3d_startframe(scene->viewbuf);
+            c3d_transformpt12(&orient2.col[0], &orient.col[0], &rot, 0);
+            c3d_transformpt12(&orient2.col[1], &orient.col[1], &rot, 0);
+            c3d_transformpt12(&orient2.col[2], &orient.col[2], &rot, 0);
+            c3d_addobject(scene->viewbuf, scene->mothership, &orient2, &zero, 0);
+            c3d_endframe(scene->viewbuf);
+
+            plotconsole(scene->buffer, scene->consoledata);
+            plotstuff(game);
+            plotxhair(game, 0);
+            plotscore(game);
+
+            c3d_displayframe(scene->viewbuf);
+
+            timethen=timenow;
+            timenow=c3d_gettime();
+
+            for (i=0; i<(timenow-timethen); i++)
+            {
+              enemy->distance -= enemy->distance >> 7;
+/*              if (!mod144) mod144++;*/
+              if (mod144>=144) mod144=0;
+              if (mod144) mod144++;
+            }
+          }
+
+/*          c3d_resetscreen(scene->viewbuf->buffer.screenbase);
+          putchar(12);*/
+          game->scene->buffer = bank(scene, !scene->viewbuf->bank);
+
+          a = c3d_gettime();
+
+          c3d_clearbank(game->scene->buffer);
+
+          plotconsole(scene->buffer, scene->consoledata);
+          plotstuff(game);
+          plotscore(game);
+          plottext(game, -1, 100, "DOCKING");
+          plottext(game, -1, 130, "ACCOMPLISHED");
+          blinds(bank(scene, scene->viewbuf->bank), bank(scene, !scene->viewbuf->bank));
+
+          while (c3d_gettime() < a+200);
+
+          if (game->state==gamestate_FINALAPPROACH)
+            game->state = gamestate_LEVELDONE;
+          else
+            game->state = gamestate_REFUELLING;
+
+          enemy->distance = 131072;
+        }
+        break;
+
+        case gamestate_REFUELLAUNCH:
+        case gamestate_LAUNCH:
+        {
+          enemyinfo* enemy;
+          list* item;
+          point2d pos;
+          int spd=8;
+          int a = c3d_gettime();
+
+//          c3d_resetscreen(scene->viewbuf->buffer.screenbase);
+          game->scene->buffer = bank(scene, !scene->viewbuf->bank);
+          c3d_clearbank(game->scene->buffer);
+
+          plotconsole(scene->buffer, scene->consoledata);
+          plotstuff(game);
+          plotscore(game);
+          plottext(game, -1, 90, "P R E P A R E");
+          plottext(game, -1, 120, "T O");
+          plottext(game, -1, 150, "L A U N C H");
+          blinds(bank(scene, scene->viewbuf->bank), bank(scene, !scene->viewbuf->bank));
+          while (c3d_gettime() < a+200);
+
+          // foo.
+          for (item=game->enemies; item; item=item->prev)
+          {
+            enemy = (enemyinfo*) item->data;
+            if (enemy->type == enemytype_MOTHERSHIP) break;
+          }
+
+          enemy->distance=2048;
+
+          toscreen(game->scene, &pos, &enemy->pos);
+
+          timethen=timenow=c3d_gettime();
+
+          // make tha launch noise
+          flexisound_play(game->sound.launch, 3, 0x17f, 0x1000);
+
+          scene->viewbuf->orient.col[0].x = 4096;
+          scene->viewbuf->orient.col[0].y = 0;
+          scene->viewbuf->orient.col[0].z = 0;
+          scene->viewbuf->orient.col[1].x = 0;
+          scene->viewbuf->orient.col[1].y = 4096;
+          scene->viewbuf->orient.col[1].z = 0;
+          scene->viewbuf->orient.col[2].x = 0;
+          scene->viewbuf->orient.col[2].y = 0;
+          scene->viewbuf->orient.col[2].z = 4096;
+
+          scene->viewbuf->pos.x = scene->viewbuf->pos.y = scene->viewbuf->pos.z = 0;
+
+          while (enemy->distance>-512)
+          {
+            matrix orient = {-4096,0,0,0,0,4096,0,4096,0};
+            point zero = {0, 0, 256*256};
+
+            zero.z = enemy->distance*6;
+//            zero.x = (pos.x-16*160)*84;
+//            zero.y = (16*128-pos.y)*84;
+
+            scene->buffer = bank(scene, 1-scene->viewbuf->bank);
+
+            c3d_clearbank(scene->buffer);
+
+            plotscene(scene);
+//            plotenemies(game);
+
+            c3d_startframe(scene->viewbuf);
+            c3d_addobject(scene->viewbuf, scene->mothership, &orient, &zero, 0);
+            c3d_endframe(scene->viewbuf);
+
+            plotconsole(scene->buffer, scene->consoledata);
+            plotstuff(game);
+            plotxhair(game, 0);
+            plotscore(game);
+
+            c3d_displayframe(scene->viewbuf);
+
+            timethen=timenow;
+            timenow=c3d_gettime();
+
+            for (i=0; i<(timenow-timethen); i++)
+            {
+              enemy->distance -= spd;
+/*              if (!mod144) mod144++;*/
+//              updatestatus();  // move enemies & stuff
+            }
+          }
+          enemy->distance = 131072;
+
+          game->state = gamestate_IDLE;
+
+          // make wobble noise
+          flexisound_play(game->sound.wobble, 4, 0x15f, 0x1000);
+
+          timethen=timenow=c3d_gettime();
+        }
+        break;
+
+        case gamestate_REFUELLING:
+        {
+          int a;
+          c3d_resetscreen(scene->viewbuf->buffer.screenbase);
+          game->scene->buffer = bank(scene, 0);
+
+          a = c3d_gettime();
+
+          if (game->fuelcells>0)
+          {
+            int upto = game->fuel+32768;
+            if (upto>65535) upto=65535;
+
+            plottext(game, -1, 100, "REFUELLING");
+            plottext(game, -1, 130, "PLEASE WAIT");
+
+            while (game->fuel<upto && !c3d_keydown(-99))
+            {
+              game->fuel+=64;
+              if (game->fuel>65535) game->fuel = 65535;
+// right, this is a bit dubious - the whole screen isn't cleared, but
+// most of it is scribbled over repeatedly. Nice.
+              plotconsole(scene->buffer, scene->consoledata);
+              plotstuff(game);
+              plotscore(game);
+              updatestatus();             // do the stuff
+              _swix(OS_Byte, _IN(0), 19); // wait for vsync, evil I know
+            }
+
+            game->fuel+=32768;
+            if (game->fuel>65535) game->fuel=65535;
+            game->fuelcells--;
+          }
+          else
+          {
+            plottext(game, -1, 115, "OUT OF FUEL");
+            while (c3d_gettime() < a+150);
+          }
+        }
+        game->state = gamestate_REFUELLAUNCH;
+        timenow = timethen = c3d_gettime();
+        break;
+
+        case gamestate_LEVELDONE:
+        {
+  //        int a = c3d_gettime();
+          tidylevel(game);
+          game->state = gamestate_ORBIT_LEVELDONE;
+          game->level++;
+          game->fuel = 65535;
+          game->shield = 65535;
+          game->msshield += 16384;
+          if (game->msshield>65535) game->msshield=65535;
+          game->laser = 65535;
+  /*        c3d_resetscreen(scene->viewbuf->buffer.screenbase);
+          putchar(12);
+          game->scene->buffer = scene->viewbuf->buffer.screenbase;
+          plottext(game, -1, 60, "ENTERING LEVEL");
+          plottext(game, -1, 110, "%d", game->level+1);
+          while (c3d_gettime() < a+300);
+          game->state = gamestate_LAUNCH;
+          initlevel(game);
+          timethen=timenow=c3d_gettime();*/
+        }
+        break;
+
+        case gamestate_DIED:
+        {
+          int a = c3d_gettime();
+          tidylevel(game);
+          c3d_resetscreen(scene->viewbuf->buffer.screenbase);
+          scene->buffer = bank(scene, 0);
+          plottext(game, -1, 90, "GAME OVER");
+          while (c3d_gettime() < a+300);
+          c3d_clearbank(scene->buffer);
+          insertscore(game, game->score);
+          game->state = gamestate_EXIT;
+        }
+        break;
+
+        case gamestate_ORBIT_LEVELDONE:
+        case gamestate_ORBIT:
+        {
+          matrix orient = {4096,0,0,0,0,-4096,0,4096,0}, rot;
+          point around, zero = {0, 0, 512*256};
+          int count;
+          int spacepressed=0;
+          int firstframe=1;
+//        vbufinfo* viewbuf = game->scene->viewbuf;
+
+          while (spacepressed != 2)
+          {
+            do {
+              around.x = (rand()&511)-256;
+              around.y = (rand()&511)-256;
+              around.z = (rand()&511)-256;
+            } while (abs(around.x)+abs(around.y)+abs(around.z)<128);
+            c3d_normalize12(&around);
+
+            c3d_generatematrix(&rot, &around, 3);
+
+            for (count=0; count<500; count++)
+            {
+              scene->buffer = bank(scene, 1-scene->viewbuf->bank);
+              c3d_clearbank(scene->buffer);
+              plotscene(scene);
+
+              scene->offset.x -= around.z>>4;
+              scene->offset.y += around.x>>4;
+
+              c3d_transformpt12(&orient.col[0], &orient.col[0], &rot, 0);
+              c3d_transformpt12(&orient.col[1], &orient.col[1], &rot, 0);
+              c3d_transformpt12(&orient.col[2], &orient.col[2], &rot, 0);
+              c3d_cleanmatrix(&orient);
+
+              c3d_startframe(scene->viewbuf);
+  //            c3d_transformpt12(&orient2.col[0], &orient.col[0], &rot, 0);
+  //            c3d_transformpt12(&orient2.col[1], &orient.col[1], &rot, 0);
+  //            c3d_transformpt12(&orient2.col[2], &orient.col[2], &rot, 0);
+              c3d_addobject(scene->viewbuf, scene->mothership, &orient, &zero, 0);
+              c3d_endframe(scene->viewbuf);
+
+              if (game->state == gamestate_ORBIT_LEVELDONE)
+              {
+                plottext(game, -1, 100, "ENTERING LEVEL");
+                plottext(game, -1, 130, "%d", game->level+1);
+              }
+
+              if (c3d_keydown(-99)) spacepressed=1;
+              else if (spacepressed==1)
+              {
+                spacepressed=2;
+                break;
+              }
+
+              if (firstframe)
+              {
+                blinds(bank(scene, scene->viewbuf->bank), bank(scene, !scene->viewbuf->bank));
+                timenow=timethen=c3d_gettime();
+                c3d_displayframe(scene->viewbuf);
+                firstframe=0;
+              }
+              else c3d_displayframe(scene->viewbuf);
+            }
+          }
+          if (game->state == gamestate_ORBIT_LEVELDONE)
+          {
+            game->state = gamestate_LAUNCH;
+            initlevel(game);
+            timethen=timenow=c3d_gettime();
+          }
+        }
+      }
+    }
+    tidylevel(game);
+    resetgame(game);
+  }
+}
+
+void updatestatus(void)
+{
+  gameinfo* game = global_game;
+  int max;
+
+  updateenemies(game);
+
+  if (game->state!=gamestate_READYTODOCK && game->state!=gamestate_LAUNCH)
+    controls(game);
+
+  if (game->powerup==powerup_JELLY)
+  {
+    game->pos.x += game->speed.x+((game->amp.x*c3d_sini12(game->phase.x))>>13);
+    game->pos.y += game->speed.y+((game->amp.y*c3d_sini12(game->phase.y))>>13);
+  }
+  else
+  {
+    game->pos.x += game->speed.x;
+    game->pos.y += game->speed.y;
+  }
+
+  max = abs(game->speed.x) + abs(game->speed.y);
+
+  // re-pitch wobbly sound (bit 7 of volume set means the sample isn't restarted)
+  flexisound_play(game->sound.wobble, 4, 0x1df, 0x1000+max*2);
+
+  game->scene->offset.x = game->pos.x >> 2;
+  game->scene->offset.y = game->pos.y >> 2;
+
+  if (game->state == gamestate_FIRING)
+  {
+    game->shotdepth += 3072;
+    if (game->shotdepth > 262144) testcollision(game);
+  }
+
+  if (!game->enemies) game->state = gamestate_LEVELDONE;
+
+  if (!(rand()&4095))
+  {
+    enemyinfo* enemy;
+    c3d_list_add(&game->enemies);
+    enemy = game->enemies->data = (void*) newenemy(enemytype_POWERUP);
+    enemy->distance = 65536;
+    qrand(enemy->speed.x, 48);
+    qrand(enemy->speed.y, 48);
+    enemy->energy = 0;
+    enemy->statecounter = 333;
+    enemy->whiteout = 10;  // flash on appearance
+    enemy->subclass = rand()&3;
+  }
+
+  game->ticker++;
+  if (game->explostate>0) game->explostate--;
+  game->fuel-=4;
+  game->laser += (game->lasertype==1) ? 48 : 32;
+  if (game->laser > 65535) game->laser = 65535;
+  if (game->fuel <= 0) game->state = gamestate_DIED;
+  if (game->messagetimer) game->messagetimer--;
+  if (game->poweruptimer && !--game->poweruptimer)
+  {
+    game->powerup = powerup_NONE;
+    message(game, "NORMAL");
+  }
+}

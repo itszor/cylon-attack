@@ -1,0 +1,113 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+
+#ifndef ENEMY_H
+#define ENEMY_H 1
+
+#include "scene.h"
+#include "game.h"
+
+// Non-zero, non-biased random macros
+#define qrand(X,R) { int temp=(rand()&((R)-1))-((R)/2); X=temp>=0 ? temp+1 : temp; }
+#define arand(X,R) { int temp=(rand()&((R)-1))-((R)/2); X+=temp>=0 ? temp+1 : temp; }
+
+typedef enum {
+  enemymode_IDLE,
+  enemymode_APPROACH,
+  enemymode_ATTACK,
+  enemymode_RETREAT,
+  enemymode_INTERSECT
+} enemymode;
+
+typedef enum {
+  enemytype_SKULL,
+  enemytype_FIGHTER,
+  enemytype_SNAKE,
+  enemytype_SNAKE_A,
+  enemytype_SAUCER,
+  enemytype_SHELL,
+  enemytype_MOTHERSHIP,
+  enemytype_POWERUP,   // silly really innit?
+  // Things below here aren't plotted on the map
+  enemytype_BOMB1,
+  enemytype_BOMB2,
+  enemytype_EXPLOSION
+} enemytype;
+
+// ENEMYSTATES, ENEMYTYPES defined in game.h
+
+typedef struct {
+  enemytype type;
+  enemymode mode;
+  int subclass;
+  int statecounter;
+  int energy;
+  int damage;
+  int whiteout;
+  point2d pos;
+  point2d speed;
+  int distance;
+  void* extra;
+} enemyinfo;
+
+// Extra data for some enemy types
+
+#define TRAILLEN 200
+#define CURVINESS 5
+#define SEGLENGTH 25
+
+typedef struct {
+  point2d trail[TRAILLEN];
+  int angle, angled, length, ptr, maxlen;
+} snakeinfo;
+
+extern enemyinfo* newenemy(enemytype);
+extern void deleteenemy(enemyinfo*);
+extern void plotenemies(gameinfo*);
+extern int intersect(gameinfo*, enemyinfo*, point2d*);
+extern int atcentreof(gameinfo*, enemyinfo*, point2d*);
+extern void updateenemies(gameinfo*);
+extern void testcollision(gameinfo*);
+extern void dopowerup(gameinfo*, enemyinfo*);
+
+// Idle
+extern int default_idle(void*, void*);
+extern int explosion_idle(void*, void*);
+extern int bomb_idle(void*, void*);
+extern int mothership_idle(void*, void*);
+extern int snake_idle(void*, void*);
+extern int powerup_idle(void*, void*);
+
+// Approach/retreat
+extern int default_approach(void*, void*);
+extern int snake_approach(void*, void*);
+extern int default_retreat(void*, void*);
+
+// Attacking modes
+extern int skullfighter_attack(void*, void*);
+extern int saucer_attack(void*, void*);
+extern int shell_attack(void*, void*);
+extern int snake_attack(void*, void*);
+
+// Stuff
+extern void randomwalk(enemyinfo*, int, int, int, int);
+extern void checkretreat(gameinfo*, enemyinfo*);
+
+#endif

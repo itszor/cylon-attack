@@ -1,0 +1,40 @@
+/*
+**    Name: intmath.h
+**
+**    Date: Thu Sep 17 13:10:30 1998
+**
+*/
+
+#ifndef C3D_INTMATH_H
+#define C3D_INTMATH_H 1
+
+#include "primitive.h"
+
+extern int* c3d_sintab;
+extern int* c3d_costab;
+
+// domain: 0..1023   range: -256..256
+#define c3d_sini(N) (c3d_sintab[(N) & 1023]>>4)
+#define c3d_cosi(N) (c3d_costab[(N) & 1023]>>4)
+
+#define square(N) ((N)*(N))
+
+extern int c3d_fsqrt(int);
+extern void c3d_addvec(point* dest, point* op1, point* op2);
+extern void c3d_subvec(point* dest, point* op1, point* op2);
+extern void c3d_crossprod8(point* dest, point* op1, point* op2);
+extern void c3d_crossprod12(point* dest, point* op1, point* op2);
+extern int c3d_dotprod8(point* op1, point* op2);
+extern int c3d_dotprod12(point* op1, point* op2);
+extern void c3d_transformpt12(point* dest, point* src, matrix* mat, point* off);
+extern void c3d_rtransformpt12(point* dest, point* src, matrix* mat, point* off);
+extern void c3d_normalize(point* op);
+extern void c3d_normalize12(point* op);
+/* Auto */
+
+extern int c3d_sini12(int n)
+;
+extern int c3d_cosi12(int n)
+;
+
+#endif

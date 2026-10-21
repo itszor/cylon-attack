@@ -1,0 +1,37 @@
+/*
+**    Name: bucket.h
+**
+**    Date: Thu Sep 17 13:02:45 1998
+**
+*/
+
+#ifndef C3D_BUCKET_H
+#define C3D_BUCKET_H 1
+
+#include "primitive.h"
+
+// should be mirrored in hdr.defs
+#define NUMBER_OF_BUCKETS    6144
+#define MAX_POLYGONS         5120
+
+#define C3D_NUMTABLES	4
+
+typedef struct {
+  int* textures;
+  int* textures24bpp;
+  int* patterns;
+  int* gouraudshades;
+  int* sprites;
+  int* cloud;
+  int* tables[C3D_NUMTABLES];
+} decor;
+
+void c3d_render(blist* in, bpolygon* poly, decor* dec, int* screenbase);
+void c3d_initlist(blist* in);
+bpolygon* c3d_addtoview(blist* in, bpolygon* poly, int depth);
+int c3d_onscreen(point* pt0, point* pt1, point* pt2, point* pt3);
+int c3d_checkorder(point* pt0, point* pt1, point* pt2, point* pt3);
+int c3d_checkorder3(point* pt0, point* pt1, point* pt2);
+int c3d_perspect(point* out, point* in);
+
+#endif

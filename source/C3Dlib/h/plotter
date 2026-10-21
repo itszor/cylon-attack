@@ -1,0 +1,29 @@
+/*
+**    Name: plotter.h
+**
+**    Date: Thu Sep 17 13:16:09 1998
+**
+*/
+
+#ifndef C3D_PLOTTER_H
+#define C3D_PLOTTER_H 1
+
+typedef struct {
+  point2d input[4];
+  point2d tc[4];
+  int depth[4];
+} coords;
+
+typedef struct {
+  int input[4];
+  int work[4];
+} gourin;
+
+
+void c3d_inittexture(int* screenbase, int* lut);
+void c3d_texture(coords* input, int* spritebase, int spritenumber, int log2width);
+void c3d_plainquad(coords* input, int null, int colword);
+void c3d_initmap(int* screenbase, int* workspace, int* fogclut);
+// void gouraud(coords* input, char* shades, int shadenumber, gourin* cornershades);
+
+#endif

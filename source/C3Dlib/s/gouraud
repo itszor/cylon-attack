@@ -1,0 +1,376 @@
+; old code - untested in this version
+
+
+	GET C3Dlib:hdr.defs
+
+
+	IMPORT c3d_divtab
+	IMPORT c3d_screenbase
+	IMPORT c3d_workspace
+
+
+
+	MACRO
+	swap $source, $dest
+	eor $source,$source,$dest
+	eor $dest,$source,$dest
+	eor $source,$source,$dest
+	MEND
+
+
+
+	MACRO
+	compare_swap $a,$b
+	ldr r5,[r2,#$a*32]        ; ytop(a)
+	ldr r6,[r2,#$b*32]        ; ytop(b)
+	cmp r5,r6
+	ble %f1
+	add r5,r2,#$a*32
+	add r6,r2,#$b*32
+	mov r7,#20
+2
+	ldr r8,[r5,r7]
+	ldr r9,[r6,r7]
+	str r9,[r5,r7]
+	str r8,[r6,r7]
+	subs r7,r7,#4
+	bge %b2
+1
+	MEND
+
+
+	MACRO
+ 	getshade $dest
+
+	IF dither=1
+
+	and $dest,r9,#&FF << 8
+	subs r1,r1,$dest
+	mov $dest,r9,asr #16
+	addle $dest,$dest,#1
+	addle r1,r1,#&FF << 8
+	ldrb $dest,[r3,$dest]
+
+	ELSE
+
+	ldrb $dest,[r3,r9,asr #16]
+
+	ENDIF
+
+	MEND
+
+
+
+
+	AREA |TextureMap$$Code|, CODE, READONLY
+
+
+	EXPORT c3d_gouraud
+c3d_gouraud
+	; Gouraud-shading routine
+
+	; new entry params   r0 = input
+	;                    r1 = base of shades
+	;                    r2 = shade number
+	;		     r3 = pointer to corner shades
+
+	; format of workspace is (list of)
+	; 0  = (int) ytop    - top of segment
+	; 4  = (int) height  - vertical height of segment
+	; 8  = (fix) xstart  - horizontal start position of segment
+	; 12 = (fix) xdelta  - amount to change above by each scan line
+	; 16 = (fix) shade   - shade value
+	; 20 = (fix) dshade  - change in shade
+	; 24, 28 padding (×32 easier)
+
+	stmfd r13!,{r4-r12,r14}
+
+	mov r5,r3
+	add r3,r1,r2,lsl #4	; shade block is 16 bytes long
+	adrl r2,c3d_workspace
+	mov r1,r5		; gouraud corners
+
+	mov r5,#3
+	mov r10,r2                ; index into workspace
+point_to_segment
+	add r6,r5,#1
+	and r6,r6,#3            ; r6=(r5+1)MOD4
+
+	add r7,r0,r5,asl #3
+	add r8,r0,r6,asl #3
+	ldr r9,[r7,#4]          ; y0
+	ldr r12,[r8,#4]         ; y1
+
+	cmp r9,r12
+	ble p_to_s_noswap       ; note; can't use ldm/stm because not contiguous
+	str r9, [r8,#36]      ; swap y0 and y1
+	str r12,[r7,#36]
+	ldr r9, [r7,#0]       ; swap x0 and x1
+	ldr r12,[r8,#0]
+	str r9, [r8,#32]
+	str r12,[r7,#32]
+	add r7,r1,r5,asl #2
+	add r8,r1,r6,asl #2
+	ldr r9, [r7,#0]       ; swap sx0 and sx1
+	ldr r12,[r8,#0]
+	str r9, [r8,#16]
+	str r12,[r7,#16]
+	b finishswap
+p_to_s_noswap
+	str r9, [r7,#36]       ; copy y0 and y1
+	str r12,[r8,#36]
+	ldr r9, [r7,#0]       ; copy x0 and x1
+	ldr r12,[r8,#0]
+	str r9, [r7,#32]
+	str r12,[r8,#32]
+	add r7,r1,r5,asl #2
+	add r8,r1,r6,asl #2
+	ldr r9, [r7,#0]       ; copy sx0 and sx1
+	ldr r12,[r8,#0]
+	str r9, [r7,#16]
+	str r12,[r8,#16]
+finishswap
+
+	add r7,r0,r5,asl #3   ; recalculate previous r7, r8
+	add r8,r0,r6,asl #3   ; should be faster than ld#.
+
+	ldr r9,[r7,#36]          ; ytop
+	ldr r11,[r8,#36]         ; ybottom
+	sub r11,r11,r9           ; height       r11 is height!!!
+
+	ldr r4,[r7,#32]          ; xstart
+	mov r12,r4,asl #16
+	stmia r10,{r9,r11,r12}	  ; equiv. 3 str's
+
+	ldr r9,[r8,#32]         ; xend
+	sub r9,r9,r4		; r9<-width
+
+	adrl r8,c3d_divtab
+	cmp r11,#2992
+	ldmgefd r13!,{r4-r12,pc} ; anti-crash
+	ldr r11,[r8,r11,asl #2]
+	mul r12,r9,r11		; r11 used here
+	str r12,[r10,#12]	; xdelta
+
+	; the following stuff is for gouraud shading
+
+	add r7,r1,r5,asl #2
+	add r8,r1,r6,asl #2
+
+	ldr r9,[r7,#16]		; start shade
+	str r9,[r10,#16]	; store start shade
+	ldr r12,[r8,#16]	; end shade
+	sub r12,r12,r9
+	mov r12,r12,asr #6
+	mul r9,r12,r11
+	mov r9,r9,asr #10	; ...total asr #16
+	str r9,[r10,#20]	; shade delta
+
+	add r10,r10,#32		; next segment
+
+	subs r5,r5,#1
+	bge point_to_segment
+
+	; sort segments top-to-bottom
+
+	compare_swap 0,1
+	compare_swap 0,2
+	compare_swap 0,3
+	compare_swap 1,2
+	compare_swap 1,3
+	compare_swap 2,3
+
+	adrl r4,c3d_screenbase
+	ldr r4,[r4]
+
+	ldr r5,[r2]               ; ytrace = ytop(0)
+	mov r14,r5
+	add r4,r4,r5,asl #shift_1
+	add r4,r4,r5,asl #shift_2
+
+	mov r0,#0
+find_nonhoriz_segment_0
+	add r5,r2,r0,lsl #5
+	ldr r7,[r5,#4]          ; check validity of seg0
+	cmp r7,#0
+	add r0,r0,#1
+	beq find_nonhoriz_segment_0
+
+	cmp r0,#4                 ; no point in continuing if the pointer is this
+	ldmgefd r13!,{r4-r12,pc}  ; moved to here so polygons don't disappear if two at top
+
+find_nonhoriz_segment_1
+	add r6,r2,r0,lsl #5
+	ldr r7,[r6,#4]          ; check validity of seg1
+	cmp r7,#0
+	add r0,r0,#1
+	beq find_nonhoriz_segment_1
+
+	; plot that gouraud thing!
+
+repeat_loop
+	ldr r7,[r5,#8]		; xstart(active0)
+	ldr r8,[r6,#8]		; xstart(active1)
+
+	cmp r7,r8
+
+	ldrlt r9,[r5,#16]       ; left shade
+	ldrlt r11,[r6,#16]	; right shade
+	ldrge r9,[r6,#16]
+	ldrge r11,[r5,#16]
+	eorge r7,r7,r8
+	eorge r8,r7,r8
+	eorge r7,r7,r8
+
+; r10, r12 free from last time
+
+	mov r7,r7,asr #16	; bizarre instruction order? - r7 needed later
+	rsb r8,r7,r8,asr #16	; r8 is line-length
+
+	sub r11,r11,r9
+
+	adrl r10,c3d_divtab	; division using table - over 150% faster!
+	ldr r1,[r10,r8,asl #2]
+	mov r11,r11,asr #5
+	mul r11,r1,r11
+	mov r11,r11,asr #11
+
+	; clip to right of screen
+	mov r1,#320
+	sub r1,r1,#1		; ie mov r1,#319
+	add r10,r7,r8
+	cmp r10,r1
+	rsbge r8,r7,r1		; bound-check rhs
+	cmp r8,#0
+	blt skip_fill
+
+	; clip to left of screen
+	cmp r7,#0
+	bge no_clip_left
+	rsb r10,r7,#0		; r0=number of clipped pixels
+	subs r8,r8,r10
+	blt skip_fill		; drop out if neg length
+	mov r7,#0
+	mla r9,r11,r10,r9	; compensate missed bytes in texture things
+				; I'm quite pleased with this bit (it works)
+no_clip_left
+
+	; clip to top
+	cmp r14,#0		; this may be better done using a method of hacking
+	blt skip_fill		; about with the segment data before the main loop.
+
+	; clip to bottom
+	cmp r14,#size_y
+	ldmgefd r13!,{r4-r12,pc} ; drop out immediately
+
+	add r7,r4,r7		; r7 is address of line start
+
+	cmp r8,#8
+	blt jump_in_point	; less than 8 pixels, plot as individual pixels
+
+	and r12,r7,#3
+	rsb r12,r12,#3
+	sub r8,r8,r12
+	IF dither=1
+	add r10,r7,r14,asl #6	; fishy antiartifactation
+	and r1,r10,#&FF << 8	; actually, doesn't work at all
+	ENDIF
+fill_loop_start
+	getshade r10
+	strb r10,[r7],#1
+	add r9,r9,r11
+	subs r12,r12,#1
+	bge fill_loop_start
+
+	bic r7,r7,#3
+	sub r8,r8,#4
+
+fill_loop
+	getshade r12		; repeated 4 times to fill a word
+	add r9,r9,r11
+
+	getshade r10
+	orr r12,r12,r10,asl #8
+	add r9,r9,r11
+
+	getshade r10
+	orr r12,r12,r10,asl #16
+	add r9,r9,r11
+
+	getshade r10
+	orr r12,r12,r10,asl #24
+	add r9,r9,r11
+
+	str r12,[r7],#4
+
+	subs r8,r8,#4
+	bgt fill_loop
+
+	add r8,r8,#3
+
+jump_in_point
+
+fill_loop_end
+	getshade r10
+	strb r10,[r7],#1
+	add r9,r9,r11
+	subs r8,r8,#1
+	bge fill_loop_end
+
+skip_fill
+
+	; update texture-map variables (active0)
+	add r11,r5,#16
+	ldmia r11,{r7,r8}
+	add r7,r7,r8
+	str r7,[r11]
+
+	; update more texture-map variables (active1)
+	add r11,r6,#16
+	ldmia r11,{r7,r8}
+	add r7,r7,r8
+	str r7,[r11]
+
+	; do xstart(active0)+=xdelta(active0)
+;	add r10,r5,#4
+	ldmib r5,{r7,r8,r9}     ; height, xstart, xdelta
+	add r8,r8,r9
+	subs r7,r7,#1            ; *** affect flags
+	stmib r5,{r7,r8}        ; only store back height, xstart
+	bgt no_segment_overwrite_0
+segment_rewrite_0
+	cmp r0,#4
+	ldmeqfd r13!,{r4-r12,pc}
+	add r5,r2,r0,asl #5
+	add r0,r0,#1
+	ldr r10,[r5,#4]        ; check if height of segment is zero
+	cmp r10,#0
+	beq segment_rewrite_0  ; if so get next/quit instead
+no_segment_overwrite_0
+
+	; do xstart(active1)+=xdelta(active1)
+;	add r10,r6,#4
+	ldmib r6,{r7,r8,r9}     ; height, xstart, xdelta
+	add r8,r8,r9
+	subs r7,r7,#1            ; *** affect flags
+	stmib r6,{r7,r8}        ; only store back height, xstart
+	bgt no_segment_overwrite_1
+segment_rewrite_1
+	cmp r0,#4
+	ldmeqfd r13!,{r4-r12,pc}
+	add r6,r2,r0,asl #5
+	add r0,r0,#1
+	ldr r10,[r6,#4]        ; check if height of segment is zero
+	cmp r10,#0
+	beq segment_rewrite_1  ; if so get next/quit instead
+no_segment_overwrite_1
+
+	add r4,r4,#size_x ; change this (presumably) for different screen widths
+	add r14,r14,#1
+	b repeat_loop
+
+	ldmfd r13!,{r4-r12,pc}  ; the code never reaches here
+
+
+
+	END

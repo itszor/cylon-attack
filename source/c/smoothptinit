@@ -1,0 +1,48 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+#include <math.h>
+#include "smoothpoint.h"
+
+char cuberoottab[256];
+unsigned int smoothpttab[16][16];
+
+void smoothptinit(void)
+{
+  int i, j;
+
+  cuberoottab[0] = 0;
+
+  for (i=1; i<256; i++)
+    cuberoottab[i] = (char)(40.3701074*pow((double)i, 1./3.));
+
+  for (j=0; j<16; j++)
+  {
+    int ji=15-j;
+    for (i=0; i<16; i++)
+    {
+      int ii=15-i;
+      int p0 = cuberoottab[ii*ji];
+      int p1 = cuberoottab[i*ji];
+      int p2 = cuberoottab[ii*j];
+      int p3 = cuberoottab[i*j];
+      smoothpttab[j][i] = p0 | (p1<<8) | (p2<<16) | (p3<<24);
+    }
+  }
+}

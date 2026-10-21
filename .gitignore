@@ -1,0 +1,13 @@
+# build products
+hybrid/build/
+*.o
+hybrid/cylon
+# run outputs
+recomp.*
+untranslated.log
+vidc.log
+screenshot-*.bmp
+core
+core.*
+# the source release (source/ is its contents)
+casrc.zip

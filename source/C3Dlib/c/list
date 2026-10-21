@@ -1,0 +1,74 @@
+/*
+**    Name: list.c
+**
+**    Date: Sat Jun 27 15:24:02 1998
+**
+*/
+
+#include <stdlib.h>
+
+#include "allocv.h"
+#include "list.h"
+
+void c3d_list_add(list** oldhead)
+{
+  list* item = c_new(list);
+  item->data = 0;
+  item->prev = *oldhead;
+  item->next = 0;
+  if (*oldhead) (*oldhead)->next = item;
+
+  *oldhead = item;
+}
+
+void c3d_list_removehead(list** head)
+{
+  list* prev = (*head)->prev;
+  if (*head) free(*head);
+  *head = prev;
+}
+
+// Delinks an item without freeing its data pointer */
+void c3d_list_delinkitem(list** head, list* item)
+{
+  if (!item) return;
+  if (item->prev) item->prev->next = item->next;
+  if (item->next) item->next->prev = item->prev;
+  if (*head == item) *head = item->prev;
+  free(item);
+}
+
+list* c3d_list_itemfromdata(list* li, void* data)
+{
+  for (; li; li = li->prev) if (li->data == data) return li;
+
+  return 0;
+}
+
+void c3d_list_destroy(list* li)
+{
+  while (li) c3d_list_removehead(&li);
+}
+
+list* c3d_list_nthitem(list* li, int item)
+{
+  while (item>0)
+  {
+    li = li->prev;
+    if (!li) return 0;   // return zero if item not in list
+    item--;
+  }
+  return li;
+}
+
+int c3d_list_length(list* head)
+{
+  int count = 0;
+
+  while (head)
+  {
+    count++;
+    head = head->prev;
+  }
+  return count;
+}

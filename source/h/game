@@ -1,0 +1,122 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+
+#ifndef GAME_H
+#define GAME_H 1
+
+#include "list.h"
+#include "scene.h"
+#include "sound.h"
+#include "hiscore.h"
+
+// unfortunately need to be known before the rest of enemy.h, so declared here
+#define ENEMYSTATES 5
+#define ENEMYTYPES 11
+
+typedef enum {
+  gamestate_LAUNCH,
+  gamestate_IDLE,
+  gamestate_FIRING,
+  gamestate_REFUELDOCK,
+  gamestate_REFUELLING,
+  gamestate_REFUELLAUNCH,
+  gamestate_READYTODOCK,
+  gamestate_FINALAPPROACH,
+  gamestate_LEVELDONE,
+  gamestate_DIED,
+  gamestate_EXIT,
+  gamestate_ORBIT,
+  gamestate_ORBIT_LEVELDONE
+} gamestate;
+
+typedef enum {
+  powerup_NONE,
+  powerup_INVINCIBLE,
+  powerup_REVERSEKEYS,
+  powerup_DOUBLESPEED,
+  powerup_JELLY
+} powerupinfo;
+
+#define NUMPOWERUPS (powerup_JELLY+1)
+
+// What I really want here is:
+//    typedef int (*behaviour_fn)(gameinfo*, enemyinfo*);
+// but there are too many circular dependencies for my poor
+// brain to cope with. So there is pointer conversion nastiness
+// instead.
+typedef int (*behaviour_fn)(void*, void*);
+
+// This used to look nice & structured. Now it looks like I got a bunch of
+// global variables and stuck them all in a struct like I was pretending
+// to write structured code or something. Well, wtf.
+typedef struct {
+  sceneinfo* scene;
+  list* enemies;
+  gamestate state;
+  int level;
+  int lives;
+  int fuel;
+  int shield;
+  int fuelcells;
+  int msshield;
+  int laser;
+  int score;
+  int ticker;
+  point2d pos;
+  point2d speed;
+  point2d phase;
+  point2d amp;
+  powerupinfo powerup;
+  int poweruptimer;
+  int lasertype;
+  point2d shotpos;
+  int shotdepth;
+  int explostate;
+  behaviour_fn enemyctrl[ENEMYTYPES][ENEMYSTATES];
+  soundinfo sound;
+  int fuse1, fuse2;
+  int enemyshield[ENEMYTYPES];
+  char* flashmessage;
+  int messagetimer;
+  hiscoreinfo hiscores[24];
+} gameinfo;
+
+// actually in test.c
+extern int* bank(sceneinfo* scene, int bank);
+
+// hiscore.c
+extern void drawhiscores(gameinfo* game, int index);
+extern void insertscore(gameinfo* game, int score);
+
+// game.c
+extern gameinfo* newgame(void);
+extern void resetgame(gameinfo*);
+extern void plotxhair(gameinfo*, int);
+extern void plotstuff(gameinfo*);
+extern void plotmap(gameinfo*);
+extern void plotbars(gameinfo*);
+extern void plotscore(gameinfo*);
+extern void plotlaser(gameinfo*);
+extern void plottext(gameinfo*, int, int, char*, ...);
+extern void controls(gameinfo*);
+extern void message(gameinfo*, char*);
+extern int properenemies(list*);
+
+#endif

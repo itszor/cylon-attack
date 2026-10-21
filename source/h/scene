@@ -1,0 +1,82 @@
+/*
+    Cylon Attack - The Onslaught Continues!  A 2D space game
+    Copyright (C) 1999-2000  Julian T. Brown  jules@eh.org
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+
+#ifndef SCENE_H
+#define SCENE_H 1
+
+#define NUMSTARS 2560
+
+#include "c3d.h"
+
+typedef struct {
+  vbufinfo* viewbuf;  // duplicated information - yeuch
+  int* screenbase;
+  int* buffer;
+  int bank;
+  point2d* stars;
+  int* intens;
+  int numstars;
+  point2d offset;
+  object* mothership;
+  struct {
+    struct {
+      object* c;
+      object* y;
+      object* l;
+      object* o;
+      object* n;
+    } large;
+    struct {
+      object* a;
+      object* t;
+      object* t2;
+      object* a2;
+      object* c;
+      object* k;
+    } small;
+  } letters;
+  struct {
+    int* backdrop;
+    int* alien;
+    int* mothership;
+    int* saucer;
+    int* shell;
+    int* bomb;
+    int* bomb1;
+    int* bomb2;
+    int* xhair;
+    int* digit;
+    int* letter;
+    int* explo;
+    int* powerup[4];
+    int* message[5];
+    int* misc[4];
+  } bitmaps;
+  int* consoledata;
+} sceneinfo;
+
+extern const point2d MESSAGESIZES[];
+extern const point2d MISCSIZES[];
+
+extern sceneinfo* newscene(void);
+extern int toscreen(sceneinfo*, point2d* out, point2d* in);
+extern void plotscene(sceneinfo*);
+
+#endif

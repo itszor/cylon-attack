@@ -1,0 +1,395 @@
+; old code - untested in this version
+
+
+	GET C3Dlib:hdr.defs
+
+NO_PATTERNS	EQU	0
+
+
+	IMPORT c3d_divtab
+	IMPORT c3d_screenbase
+	IMPORT c3d_workspace
+
+
+	MACRO
+	swap $source, $dest
+	eor $source,$source,$dest
+	eor $dest,$source,$dest
+	eor $source,$source,$dest
+	MEND
+
+	MACRO
+	compare_swap $a,$b
+	ldr r5,[r2,#$a*16]        ; ytop(a)
+	ldr r6,[r2,#$b*16]        ; ytop(b)
+	cmp r5,r6
+	ble %f1
+	add r5,r2,#$a*16
+	add r6,r2,#$b*16
+	mov r7,#12
+2
+	ldr r8,[r5,r7]
+	ldr r9,[r6,r7]
+	str r9,[r5,r7]
+	str r8,[r6,r7]
+	subs r7,r7,#4
+	bge %b2
+1
+	MEND
+
+
+
+	AREA |TextureMap$$Code|, CODE, READONLY
+
+
+	EXPORT c3d_plainquad
+c3d_plainquad
+	; solid quadrangle plotting routine
+	; hacked out from texture mapping routine
+	; entry parameters - r0 = pointer to input vertices (size *2, last half corrupted)
+	;                    r1 = tmap
+	;                    r2 = pointer to workspace
+	;                    r3 = pointer to base of sprite
+	;                    r4 = pointer to screenbase
+
+	; new entry params   r0 = input
+	;                    r2 = colour word
+
+	; format of workspace is (list of)
+	; 0  = (int) ytop    - top of segment
+	; 4  = (int) height  - vertical height of segment
+	; 8  = (fix) xstart  - horizontal start position of segment
+	; 12 = (fix) xdelta  - amount to change above by each scan line
+	; (16 = (fix) sx      - horizontal position on texture)
+	; (20 = (fix) sy      - vertical position on texture)
+	; (24 = (fix) sxd     - amount to change sx by each scan line)
+	; (28 = (fix) syd     - amount to change sy by each scan line)
+
+	stmfd r13!,{r4-r12,r14}
+
+	orr r1,r2,r2,lsl #8
+	orr r1,r1,r1,lsl #16
+
+	adrl r4,c3d_screenbase
+	ldr r4,[r4]
+	adrl r2,c3d_workspace
+
+	mov r5,#3
+	mov r10,r2                ; index into workspace
+point_to_segment
+	add r6,r5,#1
+	and r6,r6,#3            ; r6=(r5+1)MOD4
+
+	add r7,r0,r5,asl #3
+	add r8,r0,r6,asl #3
+	ldr r9,[r7,#4]          ; y0
+	ldr r12,[r8,#4]         ; y1
+
+	cmp r9,r12
+	ble p_to_s_noswap       ; note; can't use ldm/stm because not contiguous
+	str r9, [r8,#36]      ; swap y0 and y1
+	str r12,[r7,#36]
+	ldr r9, [r7,#0]       ; swap x0 and x1
+	ldr r12,[r8,#0]
+	str r9, [r8,#32]
+	str r12,[r7,#32]
+	b finishswap
+p_to_s_noswap
+	str r9, [r7,#36]       ; copy y0 and y1
+	str r12,[r8,#36]
+	ldr r9, [r7,#0]       ; copy x0 and x1
+	ldr r12,[r8,#0]
+	str r9, [r7,#32]
+	str r12,[r8,#32]
+finishswap
+
+;	add r7,r0,r5,asl #3   ; recalculate previous r7, r8
+;	add r8,r0,r6,asl #3   ; should be faster than ld#.
+
+	ldr r9,[r7,#36]          ; ytop
+;	str r9,[r10,#0]
+	ldr r11,[r8,#36]         ; ybottom
+	sub r11,r11,r9           ; height       r11 is height!!!
+;	str r11,[r10,#4]
+
+	ldr r12,[r7,#32]          ; xstart
+	mov r14,r12,asl #16
+;	str r14,[r10,#8]
+	stmia r10,{r9,r11,r14}	 ; 3 above str's
+
+	ldr r9,[r8,#32]         ; xend
+	sub r9,r9,r12
+
+	adrl r8,c3d_divtab
+	cmp r11,#2992
+	ldmgefd r13!,{r4-r12,pc}  ; anticrash
+	ldr r11,[r8,r11,asl #2]
+	mul r12,r9,r11	          ; r11 used here
+	str r12,[r10,#12]          ; xdelta
+
+	add r10,r10,#16           ; next segment
+
+	subs r5,r5,#1
+	bge point_to_segment
+
+	; sort segments top-to-bottom
+
+	compare_swap 0,1
+	compare_swap 0,2
+	compare_swap 0,3
+	compare_swap 1,2
+	compare_swap 1,3
+	compare_swap 2,3
+
+	ldr r5,[r2]               ; ytrace = ytop(0)
+	mov r14,r5
+	add r4,r4,r5,asl #shift_1
+	add r4,r4,r5,asl #shift_2
+
+	mov r0,#0
+find_nonhoriz_segment_0
+	add r5,r2,r0,lsl #4
+	ldr r7,[r5,#4]		; check validity of seg0
+	add r0,r0,#1
+	cmp r0,#4		; if 4 here, all four segments must have no height, so exit
+	ldmgefd r13!,{r4-r12,pc}
+	cmp r7,#0
+	beq find_nonhoriz_segment_0
+
+find_nonhoriz_segment_1
+	add r6,r2,r0,lsl #4
+	ldr r7,[r6,#4]          ; check validity of seg1
+	cmp r7,#0
+	add r0,r0,#1
+	beq find_nonhoriz_segment_1
+
+        ; @ here should be OK, as there can't be only one non-zero-height segment
+
+	; plot that textrangle!
+
+repeat_loop
+	ldr r7,[r5,#8]          ; xstart(active0)
+	ldr r8,[r6,#8]          ; xstart(active1)
+
+	cmp r7,r8
+;	ble no_swap_line_direction
+;	swap r7,r8           ; xstart <-> xend
+;no_swap_line_direction
+	movle r7,r7,asr #16       ; bizarre instruction order? - r7 needed later
+	rsble r8,r7,r8,asr #16    ; r8 is line-length
+	movgt r9,r8,asr #16	  ; swapped
+	rsbgt r8,r9,r7,asr #16
+	movgt r7,r9
+
+	; doing following clipping AFTER texture mapping stuff worked out
+	; means that texture mapping is not screwed up
+
+	; clip to right of screen
+	mov r9,#size_x
+	sub r9,r9,#1            ; ie mov r1,#319
+	add r10,r7,r8
+	cmp r10,r9
+	subge r8,r9,r7          ; bound-check rhs
+	cmp r8,#0
+	blt skip_fill
+
+	; clip to left of screen
+	cmp r7,#0
+	bge no_clip_left
+	rsb r10,r7,#0          ; r0=number of clipped pixels
+	subs r8,r8,r10
+	blt skip_fill         ; drop out if neg length
+	mov r7,#0
+no_clip_left
+
+	; clip to top
+	cmp r14,#0		; this may be better done using a method of hacking
+	blt skip_fill		; about with the segment data before the main loop.
+
+	; clip to bottom
+	cmp r14,#size_y
+	ldmgefd r13!,{r4-r12,pc}
+
+	add r7,r4,r7            ; r7 is address of line start
+
+	cmp r8,#12
+	bge plotstart           ; less than 12 pixels, plot as individual pixels
+
+plain_fill_by_bytes
+	strb r1,[r7],#1
+	subs r8,r8,#1
+	bge plain_fill_by_bytes
+	b skip_fill
+
+plotstart
+	ands r9,r7,#3
+	streqb r1,[r7],#1		; jump table fills first pixels
+	cmp r9,#1
+	strleb r1,[r7],#1
+	cmp r9,#3
+	strltb r1,[r7],#1
+	strleb r1,[r7],#1
+
+	add r8,r8,r9
+	sub r8,r8,#3
+
+	mov r3,r1
+	mov r9,r1
+	mov r10,r1
+
+someleft
+	cmp r8,#32
+	blt fourword
+
+	stmfd r13!,{r0,r2}
+	mov r0,r1
+	mov r2,r1
+	mov r11,r1
+	mov r12,r1
+	subs r8,r8,#32
+
+eightword
+	stmia r7!,{r0-r3,r9-r12}
+	subs r8,r8,#32
+	bge eightword
+;	add r8,r8,#32   ; try commenting out
+
+	ldmfd r13!,{r0,r2}
+
+fourword
+	tst r8,#16
+	stmneia r7!,{r1,r3,r9,r10}
+
+twoword
+	tst r8,#8
+	stmneia r7!,{r1,r3}
+
+oneword
+	tst r8,#4
+	strne r1,[r7],#4
+
+	and r8,r8,#3
+	rsb r8,r8,#4
+	add pc,pc,r8,lsl #2
+	mov r0,r0
+	strb r1,[r7],#1
+	strb r1,[r7],#1
+	strb r1,[r7],#1
+	strb r1,[r7],#1
+
+skip_fill
+
+	; do xstart(active0)+=xdelta(active0)
+;	add r10,r5,#4
+	ldmib r5,{r7,r8,r9}     ; height, xstart, xdelta
+	add r8,r8,r9
+	subs r7,r7,#1            ; *** affect flags
+	stmib r5,{r7,r8}        ; only store back height, xstart
+	bgt no_segment_overwrite_0
+segment_rewrite_0
+	cmp r0,#4
+	ldmeqfd r13!,{r4-r12,pc}
+	add r5,r2,r0,lsl #4
+	add r0,r0,#1
+	ldr r10,[r5,#4]        ; check if height of segment is zero
+	cmp r10,#0
+	beq segment_rewrite_0  ; if so get next/quit instead
+no_segment_overwrite_0
+
+	; do xstart(active1)+=xdelta(active1)
+;	add r10,r6,#4
+	ldmib r6,{r7,r8,r9}     ; height, xstart, xdelta
+	add r8,r8,r9
+	subs r7,r7,#1            ; *** affect flags
+	stmib r6,{r7,r8}        ; only store back height, xstart
+	bgt no_segment_overwrite_1
+segment_rewrite_1
+	cmp r0,#4
+	ldmeqfd r13!,{r4-r12,pc}
+	add r6,r2,r0,lsl #4
+	add r0,r0,#1
+	ldr r10,[r6,#4]        ; check if height of segment is zero
+	cmp r10,#0
+	beq segment_rewrite_1  ; if so get next/quit instead
+no_segment_overwrite_1
+
+	add r4,r4,#size_x ; change this (presumably) for different screen widths
+	add r14,r14,#1
+	b repeat_loop
+
+	ldmfd r13!,{r4-r12,pc}  ; the code never reaches here
+
+
+	EXPORT c3d_augpoly
+c3d_augpoly
+	stmfd r13!,{r4-r12,r14}
+	mov r12,r0
+	mov r4,r1		; patterns
+	ldr r5,[r4,r2,lsl #2]
+	ldr r2,[r4,r5]!
+	bl c3d_plainquad
+	IF NO_PATTERNS=1
+	ldmfd r13!,{r4-r12,pc}	; exit here if no patterns
+	ENDIF
+	add r4,r4,#4
+	ldr r6,[r4],#4		; r6 holds num. of extensions...
+	cmp r6,#0
+	ldmeqfd r13!,{r4-r12,pc}
+nextext
+	ldr r11,[r4],#4		; r11 holds colour
+	adrl r5,c3d_workspace
+	add r5,r5,#512		; hack out a bit of workspace
+	mov r7,#3
+loop1
+	ldrb r8,[r4],#1
+	ldrb r9,[r4],#1
+
+	ldr r0,[r12,#16]
+	ldr r10,[r12,#8]
+	sub r10,r10,r0
+	mul r10,r9,r10
+	add r0,r0,r10,asr #5
+
+	ldr r1,[r12,#20]
+	ldr r10,[r12,#12]
+	sub r10,r10,r1
+	mul r10,r9,r10
+	add r1,r1,r10,asr #5
+
+	ldr r2,[r12,#24]
+	ldr r10,[r12,#0]
+	sub r10,r10,r2
+	mul r10,r9,r10
+	add r2,r2,r10,asr #5
+
+	ldr r3,[r12,#28]
+	ldr r10,[r12,#4]
+	sub r10,r10,r3
+	mul r10,r9,r10
+	add r3,r3,r10,asr #5
+
+	sub r2,r2,r0
+	mul r2,r8,r2
+	add r0,r0,r2,asr #5
+
+	sub r3,r3,r1
+	mul r3,r8,r3
+	add r1,r1,r3,asr #5
+
+	add r2,r5,r7,lsl #3
+	stmia r2,{r0,r1}
+
+	subs r7,r7,#1
+	bge loop1
+
+	mov r0,r5
+	mov r2,r11
+	bl c3d_plainquad
+
+	subs r6,r6,#1
+	bgt nextext
+
+	ldmfd r13!,{r4-r12,pc}
+
+
+	END

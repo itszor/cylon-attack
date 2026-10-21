@@ -1,0 +1,463 @@
+object {
+  name untitled
+
+  group {
+    name New group
+
+    point {
+      ref 20
+      pos -24576,-54784,-16384
+    }
+
+    point {
+      ref 19
+      pos -32256,-46080,-16384
+    }
+
+    point {
+      ref 18
+      pos 31744,69120,-16384
+    }
+
+    point {
+      ref 17
+      pos -49664,-61440,-16384
+    }
+
+    point {
+      ref 16
+      pos -40960,-69632,-16384
+    }
+
+    point {
+      ref 15
+      pos 39936,-70144,-16384
+    }
+
+    point {
+      ref 14
+      pos 48128,-61440,-16384
+    }
+
+    point {
+      ref 13
+      pos -49152,-37376,-16384
+    }
+
+    point {
+      ref 12
+      pos -32768,-38400,-16384
+    }
+
+    point {
+      ref 11
+      pos 15872,-53760,-16384
+    }
+
+    point {
+      ref 10
+      pos 15872,-5120,-16384
+    }
+
+    point {
+      ref 9
+      pos -32768,-4096,-16384
+    }
+
+    point {
+      ref 8
+      pos -17408,53760,-16384
+    }
+
+    point {
+      ref 7
+      pos -33280,69632,-16384
+    }
+
+    point {
+      ref 6
+      pos -16384,20480,-16384
+    }
+
+    point {
+      ref 5
+      pos -8704,12288,-16384
+    }
+
+    point {
+      ref 4
+      pos 15872,69632,-16384
+    }
+
+    point {
+      ref 3
+      pos 48640,52736,-16384
+    }
+
+    point {
+      ref 2
+      pos 15872,11776,-16384
+    }
+
+    point {
+      ref 1
+      pos -49664,69120,-16384
+    }
+
+    point {
+      ref 0
+      pos -49152,12288,-16384
+    }
+
+    polygon {
+      link 17,13,12,19
+      texcoords 0,510,42,1920,1408,1860,1450,1410
+      texture 8
+    }
+
+    polygon {
+      link 17,19,20,16
+      texcoords 0,510,1450,1410,2090,900,725,30
+      texture 8
+    }
+
+    polygon {
+      link 16,20,11,15
+      texcoords 725,30,2090,900,5461,960,7466,0
+      texture 8
+    }
+
+    polygon {
+      link 11,4,18,15
+      texcoords 5461,960,5461,8185,6784,8161,7466,0
+      texture 8
+    }
+
+    polygon {
+      link 15,18,3,14
+      texcoords 7466,0,6784,8161,8185,7201,8149,510
+      texture 8
+    }
+
+    polygon {
+      link 9,6,6,5
+      texcoords 1408,3870,2773,5311,2773,5311,3413,4831
+      texture 8
+    }
+
+    polygon {
+      link 9,5,2,10
+      texcoords 1408,3870,3413,4831,5461,4801,5461,3810
+      texture 8
+    }
+
+    polygon {
+      link 9,7,8,6
+      texcoords 1408,3870,1365,8185,2688,7261,2773,5311
+      texture 8
+    }
+
+    polygon {
+      link 0,1,7,9
+      texcoords 42,4831,0,8161,1365,8185,1408,3870
+      texture 8
+    }
+
+  }
+
+  group {
+    name Copied group
+
+    point {
+      ref 41
+      pos -49128,12312,16360
+    }
+
+    point {
+      ref 40
+      pos -49640,69144,16360
+    }
+
+    point {
+      ref 39
+      pos 15896,11800,16360
+    }
+
+    point {
+      ref 38
+      pos 48664,52760,16360
+    }
+
+    point {
+      ref 37
+      pos 15896,69656,16360
+    }
+
+    point {
+      ref 36
+      pos -8680,12312,16360
+    }
+
+    point {
+      ref 35
+      pos -16360,20504,16360
+    }
+
+    point {
+      ref 34
+      pos -33256,69656,16360
+    }
+
+    point {
+      ref 33
+      pos -17384,53784,16360
+    }
+
+    point {
+      ref 32
+      pos -32744,-4072,16360
+    }
+
+    point {
+      ref 31
+      pos 15896,-5096,16360
+    }
+
+    point {
+      ref 30
+      pos 15896,-53736,16360
+    }
+
+    point {
+      ref 29
+      pos -32744,-38376,16360
+    }
+
+    point {
+      ref 28
+      pos -49128,-37352,16360
+    }
+
+    point {
+      ref 27
+      pos 48152,-61416,16360
+    }
+
+    point {
+      ref 26
+      pos 39960,-70120,16360
+    }
+
+    point {
+      ref 25
+      pos -40936,-69608,16360
+    }
+
+    point {
+      ref 24
+      pos -49640,-61416,16360
+    }
+
+    point {
+      ref 23
+      pos 31768,69144,16360
+    }
+
+    point {
+      ref 22
+      pos -32232,-46056,16360
+    }
+
+    point {
+      ref 21
+      pos -24552,-54760,16360
+    }
+
+    polygon {
+      link 32,34,40,41
+      texcoords 1408,3870,1365,8185,0,8161,42,4831
+      texture 9
+    }
+
+    polygon {
+      link 35,33,34,32
+      texcoords 2773,5311,2688,7261,1365,8185,1408,3870
+      texture 9
+    }
+
+    polygon {
+      link 31,39,36,32
+      texcoords 5461,3810,5461,4801,3413,4831,1408,3870
+      texture 9
+    }
+
+    polygon {
+      link 36,35,35,32
+      texcoords 3413,4831,2773,5311,2773,5311,1408,3870
+      texture 9
+    }
+
+    polygon {
+      link 27,38,23,26
+      texcoords 8149,510,8185,7201,6784,8161,7466,0
+      texture 9
+    }
+
+    polygon {
+      link 26,23,37,30
+      texcoords 7466,0,6784,8161,5461,8185,5461,960
+      texture 9
+    }
+
+    polygon {
+      link 26,30,21,25
+      texcoords 7466,0,5461,960,2090,900,725,30
+      texture 9
+    }
+
+    polygon {
+      link 25,21,22,24
+      texcoords 725,30,2090,900,1450,1410,0,510
+      texture 9
+    }
+
+    polygon {
+      link 22,29,28,24
+      texcoords 1450,1410,1408,1860,42,1920,0,510
+      texture 9
+    }
+
+  }
+
+  group {
+    name New group
+
+    polygon {
+      link 0,41,40,1
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 1,40,34,7
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 7,34,33,8
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 8,33,35,6
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 6,35,36,5
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 5,36,39,2
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 2,39,37,4
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 4,37,23,18
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 18,23,38,3
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 3,38,27,14
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 14,27,26,15
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 15,26,25,16
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 16,25,24,17
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 17,24,28,13
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 13,28,29,12
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 19,22,21,20
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 12,29,22,19
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 20,21,30,11
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 11,30,31,10
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 10,31,32,9
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+    polygon {
+      link 9,32,41,0
+      texcoords 0,0,0,8185,8185,8185,8185,0
+      texture 9
+    }
+
+  }
+
+}

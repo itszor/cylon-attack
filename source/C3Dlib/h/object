@@ -1,0 +1,23 @@
+/*
+**    Name: object.h
+**
+**    Date: Wed Sep 23 14:57:00 1998
+**
+*/
+
+#ifndef C3D_OBJECT_H
+#define C3D_OBJECT_H 1
+
+#include "primitive.h"
+#include "vbuf.h"
+
+/* Auto */
+
+extern object* c3d_newobject(void)
+;
+extern group* c3d_newgroup(void)
+;
+extern void c3d_addobject(vbufinfo* buf, object* obj, matrix* orient, point* pos, int shift)
+;
+
+#endif

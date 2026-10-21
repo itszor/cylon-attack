@@ -1,0 +1,91 @@
+
+	GET C3Dlib:hdr.defs
+
+	IMPORT c3d_divtab
+
+	AREA |Perspective$$Code|, CODE, READONLY
+
+	EXPORT c3d_perspect
+	; does 160+(xp<<8)/(zp+1024)
+	;      128-(yp<<8)/(zp+1024)
+	; entry parameters r0 - *out (x,y screen, real z)
+	;                  r1 - *in (three-dee x,y,z)
+	; returns          r0 - zero if point off-screen
+c3d_perspect_table
+	stmfd r13!,{r4-r6,r14}
+	ldmia r1,{r2-r4}
+;	mov r2,r2,asr #8
+;	mov r3,r3,asr #8
+;	mov r4,r4,asr #8
+	adrl r5,c3d_divtab
+	mov r6,r4,asr #8
+	adds r6,r6,#256
+	movle r6,#1			; don't let z go below 1
+	ldr r5,[r5,r6,lsl #2]
+	mov r2,r2,asr #6
+	mov r3,r3,asr #6
+	mul r2,r5,r2
+	mul r3,r5,r3
+	mov r2,r2,asr #10		; remove fractional parts
+	mov r3,r3,asr #10
+	add r2,r2,#centre_x		; add origin
+	rsb r3,r3,#centre_y		; (making vertical coordinate the right way up)
+	stmia r0,{r2-r4}
+
+	cmp r2,#size_x
+	movhs r0,#0
+	cmp r3,#size_y
+	movhs r0,#0
+
+	ldmfd r13!,{r4-r6,pc}
+
+
+	IMPORT __rt_sdiv
+; I'll use a real divide routine for a change, I think.
+	EXPORT c3d_perspect
+c3d_perspect
+	; entry parameters r0 - *out (x,y screen, real z)
+	;                  r1 - *in (three-dee x,y,z)
+	; returns          r0 - zero if point off-screen
+	stmfd r13!,{r4-r7,r14}
+
+	mov r7,r0
+	ldmia r1,{r4-r6}
+	adds r0,r6,#1024
+	movle r0,#1		; zero or less is very bad.
+	mov r1,r4,asl #8
+	bl __rt_sdiv
+	add r4,r0,#centre_x
+	adds r0,r6,#1024
+	movle r0,#1
+	mov r1,r5,asl #8
+	bl __rt_sdiv
+	rsb r5,r0,#centre_y
+	stmia r7,{r4-r6}
+
+	cmp r4,#size_x
+	movhs r0,#0
+	cmp r5,#size_y
+	movhs r0,#0
+
+	ldmfd r13!,{r4-r7,pc}^
+
+
+;c3d_perspect
+;	stmfd r13!,{r4-r7,r14}
+;	adrl r4,c3d_divtab
+;	str r3,[r0,#8]			; store original z
+;	adds r3,r3,#1024
+;	movle r3,#1			; nasty perhaps, but other effect worse...
+;	mov r3,r3,asr #5		; essentially multiplies top by 2^5
+;	ldr r5,[r4,r3,lsl #2]
+;	mul r6,r1,r5			; inadvertantly multiplies by 2^16
+;	mul r7,r2,r5
+;	mov r6,r6,asr #shrink_fac	; 16+5-13=8, required shift
+;	mov r7,r7,asr #shrink_fac
+;	add r6,r6,#centre_x
+;	rsb r7,r7,#centre_y
+;	stmia r0,{r6,r7}
+;	ldmfd r13!,{r4-r7,pc}
+
+	END

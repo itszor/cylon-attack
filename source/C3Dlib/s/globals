@@ -1,0 +1,25 @@
+	AREA |GlobalData|, DATA
+
+	EXPORT c3d_divtab
+c3d_divtab
+	DCD	65536
+	GBLA	div
+div	SETA	1
+	WHILE	div<3000
+	DCD	65536/div
+div	SETA	div+1
+	WEND
+
+	EXPORT c3d_workspace
+c3d_workspace
+	% 1024
+
+	EXPORT c3d_screenbase
+c3d_screenbase
+	DCD	0
+
+	EXPORT c3d_fogclut
+c3d_fogclut
+	DCD	0
+
+	END

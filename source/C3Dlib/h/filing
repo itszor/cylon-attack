@@ -1,0 +1,40 @@
+/*
+**    Name: filing.h
+**
+**    Date: Tue Jun 30 16:11:53 1998
+**
+*/
+
+#ifndef C3D_FILING_H
+#define C3D_FILING_H 1
+
+#include "primitive.h"
+
+typedef enum {
+  level_OUTER,
+  level_OBJECT,
+  level_GROUP,
+  level_POINT,
+  level_POLYGON,
+  level_TRIANGLE
+} levels;
+
+/* C3Dlib doesn't load this type of thing, I don't think
+typedef enum {
+  wlevel_OUTER,
+  wlevel_WORLD,
+  wlevel_TRACK,
+  wlevel_PATCH,
+  wlevel_ROW,
+  wlevel_OBJECT
+} wlevels;
+*/
+
+/* Auto */
+
+extern void c3d_saveobject(char* pathname, object* obj);
+extern object* c3d_loadobject(char* pathname);
+extern upoint* ptrfromref(object* obj, int ref);
+void c3d_quickresolve(object* obj);
+
+#endif

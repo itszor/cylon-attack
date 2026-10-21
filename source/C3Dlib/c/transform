@@ -1,0 +1,131 @@
+/*
+**    Name: transform.c
+**
+**    Date: Sat Dec 26 23:05:33 1998
+**
+*/
+
+#include "allocv.h"
+#include "primitive.h"
+#include "vbuf.h"
+#include "intmath.h"
+
+/* c3d_scaleobject
+ *
+ * Scale all points in an object: ratio scale/256
+ */
+
+void c3d_scaleobject(object* obj, int scale)
+{
+  list* gwalk;
+
+  for (gwalk = obj->groups; gwalk; gwalk = gwalk->prev)
+  {
+    group* thisgroup = gwalk->data;
+    list* pwalk;
+
+    for (pwalk = thisgroup->points; pwalk; pwalk = pwalk->prev)
+    {
+      upoint* thispt = (upoint*) pwalk->data;
+
+      thispt->pos.x = (thispt->pos.x*scale) >> 8;
+      thispt->pos.y = (thispt->pos.y*scale) >> 8;
+      thispt->pos.z = (thispt->pos.z*scale) >> 8;
+    }
+  }
+}
+
+/* c3d_translateobject
+ *
+ * Translate all points in an object
+ */
+
+void c3d_translateobject(object* obj, point* translate)
+{
+  list* gwalk;
+
+  for (gwalk = obj->groups; gwalk; gwalk = gwalk->prev)
+  {
+    group* thisgroup = gwalk->data;
+    list* pwalk;
+
+    for (pwalk = thisgroup->points; pwalk; pwalk = pwalk->prev)
+    {
+      upoint* thispt = (upoint*) pwalk->data;
+
+      thispt->pos.x += translate->x;
+      thispt->pos.y += translate->y;
+      thispt->pos.z += translate->z;
+    }
+  }
+}
+
+/* c3d_transformobject
+ *
+ * Transform a whole object permanently using matrix m
+ */
+
+void c3d_transformobject(object* obj, matrix* m)
+{
+  list* gwalk;
+  static point zero={0,0,0};
+
+  for (gwalk = obj->groups; gwalk; gwalk = gwalk->prev)
+  {
+    group* thisgroup = gwalk->data;
+    list* pwalk;
+
+    for (pwalk = thisgroup->points; pwalk; pwalk = pwalk->prev)
+    {
+      upoint* thispt = (upoint*) pwalk->data;
+
+      c3d_transformpt12(&thispt->pos, &thispt->pos, m, &zero);
+    }
+  }
+}
+
+/* c3d_generatematrix
+ *
+ * Takes a vector of length 256 and an angle, and generates
+ * a rotation matrix such that points will be rotated by the
+ * given angle around that axis. Output matrix values have a
+ * fixed point after 12th bit.
+ */
+
+void c3d_generatematrix(matrix* m, point* axis, int angle)
+{
+  quaternion q;
+  int sinang = c3d_sini12(angle);
+
+  q.x = (sinang * axis->x) >> 8;
+  q.y = (sinang * axis->y) >> 8;
+  q.z = (sinang * axis->z) >> 8;
+  q.w = c3d_cosi12(angle);
+
+  m->col[0].x = 4096-((q.y*q.y + q.z*q.z)>>11);
+  m->col[0].y =       (q.x*q.y + q.w*q.z)>>11;
+  m->col[0].z =       (q.x*q.z - q.w*q.y)>>11;
+
+  m->col[1].x =       (q.x*q.y - q.w*q.z)>>11;
+  m->col[1].y = 4096-((q.x*q.x + q.z*q.z)>>11);
+  m->col[1].z =       (q.y*q.z + q.w*q.x)>>11;
+
+  m->col[2].x =       (q.x*q.z + q.w*q.y)>>11;
+  m->col[2].y =       (q.y*q.z - q.w*q.x)>>11;
+  m->col[2].z = 4096-((q.x*q.x + q.y*q.y)>>11);
+}
+
+/* c3d_cleanmatrix
+ *
+ * Ensure a matrix is orthogonal. May help reduce numerical instabilities
+ * if used in sensible locations.
+ */
+
+void c3d_cleanmatrix(matrix* m)
+{
+  c3d_crossprod12(&m->col[1], &m->col[0], &m->col[2]);
+  c3d_crossprod12(&m->col[0], &m->col[2], &m->col[1]);
+  c3d_normalize12(&m->col[0]);
+  c3d_normalize12(&m->col[1]);
+  c3d_normalize12(&m->col[2]);
+}

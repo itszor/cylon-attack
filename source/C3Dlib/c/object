@@ -1,0 +1,95 @@
+/*
+**    Name: object.c
+**
+**    Date: Wed Sep 23 14:52:32 1998
+**
+*/
+
+#include <stdlib.h>
+
+// #include "DeskLib:gfx.h"
+
+#include "allocv.h"
+#include "primitive.h"
+#include "vbuf.h"
+#include "intmath.h"
+
+object* c3d_newobject(void)
+{
+  object* newobject = c_new(object);
+
+  newobject->groups = 0;
+
+  return newobject;
+}
+
+group* c3d_newgroup(void)
+{
+  group* newgroup = c_new(group);
+
+  newgroup->points = 0;
+  newgroup->polygons = 0;
+
+  return newgroup;
+}
+
+void c3d_addobject(vbufinfo* buf, object* obj, matrix* orient, point* pos, int shift)
+{
+  list* gwalk;
+  point light = {986, 493, -3945};
+  point viewer = {0, 0, -4096};
+  matrix inv;
+
+  inv.col[0].x = orient->col[0].x;
+  inv.col[0].y = orient->col[1].x;
+  inv.col[0].z = orient->col[2].x;
+  inv.col[1].x = orient->col[0].y;
+  inv.col[1].y = orient->col[1].y;
+  inv.col[1].z = orient->col[2].y;
+  inv.col[2].x = orient->col[0].z;
+  inv.col[2].y = orient->col[1].z;
+  inv.col[2].z = orient->col[2].z;
+
+  c3d_transformpt12(&light, &light, &inv, 0);
+  c3d_transformpt12(&viewer, &viewer, &inv, 0);
+
+  for (gwalk = obj->groups; gwalk; gwalk = gwalk->prev)
+  {
+    group* thisgroup = gwalk->data;
+    list* pwalk;
+
+    for (pwalk = thisgroup->polygons; pwalk; pwalk = pwalk->prev)
+    {
+      polygon* thispolygon = pwalk->data;
+      int loop, any = 0;
+
+      for (loop=0; loop<thispolygon->edges; loop++)
+      {
+        upoint* thispt = thispolygon->pt[loop];
+        if (thispt->freshness < buf->refreshcounter)
+        {
+          point at;
+          c3d_transformpt12(&at, &thispt->pos, orient, pos);
+          c3d_rtransformpt12(&at, &at, &buf->orient, &buf->pos);
+          thispt->onscreen = c3d_perspect(&thispt->transformed, &at);
+          // clean point info
+          thispt->freshness = buf->refreshcounter;
+        }
+        // pointers to this & pointers to that
+//        transformed[loop] = &thispt->transformed;
+        any |= thispt->onscreen;
+      }
+      if (any)
+      {
+   /*     GFX_Move(transformed[0]->x*4, transformed[0]->y*4);
+        for (loop=3; loop>=0; loop--)
+        {
+          GFX_Draw(transformed[loop]->x*4, transformed[loop]->y*4);
+        }*/
+        c3d_addpoly(buf, thispolygon, &light, &viewer);
+      }
+    }
+  }
+}
+
+

@@ -1,0 +1,125 @@
+/*
+**    Name: primitive.h
+**
+**    Date: Thu Sep 17 12:27:10 1998
+**
+*/
+
+#ifndef C3D_PRIMITIVE_H
+#define C3D_PRIMITIVE_H 1
+
+#include "list.h"
+//#include "DeskLib:sprite.h"
+
+typedef struct {
+  int x,y,z;
+} point;
+
+typedef struct {
+  int x,y;
+} point2d;
+
+// 3x3 matrix
+typedef struct {
+  point col[3];
+} matrix;
+
+typedef struct {
+  int x, y, z, w;
+} quaternion;
+
+// point as defined in an object
+typedef struct {
+  point pos;
+  int ref;
+  point transformed;
+  int freshness;
+  int onscreen;
+/*  union {
+    int all;
+    struct {
+      unsigned int selected : 1;
+      unsigned int unused   : 31;
+    } flags;
+  } info;*/
+} upoint;
+
+// polygon as defined in an object
+typedef struct {
+  upoint* pt[4];      // pointers to (possibly shared) corner points
+  int ptref[4];       // ref of point (used when loading only atm)
+  point2d tex[4];     // texture coordinates
+  point normal[4];    // (unique) normals
+  int texture;        // the texture number
+  int edges;          // ok, this is horrible
+} polygon;
+
+// group of points & polygons
+typedef struct {
+//  char name[20];
+  list* points;
+  list* polygons;
+/*  polygon* selectedpoly;
+  union {
+    int all;
+    struct {
+      unsigned int visible : 1;
+      unsigned int unused : 31;
+    } flags;
+  } info;*/
+} group;
+
+// buffered polygon, ready for plotting
+// depends on Acorn C's structure alignment
+struct bpolygon {
+  int type;
+  int texture;      /* Also pattern or gouraud colour set */
+  union {
+    point2d point[4];
+    struct {
+      point2d pos;
+      point2d scale;
+    } sprite;
+  } coord;
+  point2d tc[4];
+  int depth[4];
+  struct bpolygon* next;
+  int shade[4];
+};
+
+typedef struct bpolygon bpolygon;
+
+// header for singly-linked list of buffered polygons
+typedef struct {
+  bpolygon *start, *end;
+} blist;
+
+typedef struct {
+  char name[20];
+  list* groups;
+} object;
+
+typedef struct {
+  unsigned char r, g, b;
+} rgbcol;
+
+
+// all now irrelevent
+
+// singly-linked list of pointers to polygons
+/*struct polylist {
+  polygon* poly;
+  struct polylist* next;
+};
+
+typedef struct polylist polylist;
+
+typedef struct {
+  polylist* centre;
+  polylist* intersect;
+} gridcell;
+
+// the map grid is predefined at 128x128 cells
+#define accesscell(C, X, Y) ((C)[((Y)<<7)+(X)])
+*/
+#endif
