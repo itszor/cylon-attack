@@ -6,7 +6,7 @@ SS      ?= $(HOME)/stuff/superspider
 CC      ?= gcc
 CFLAGS  ?= -O2 -g
 SRC     := ../source
-LIBS    := $(shell pkg-config --libs sdl3) -lm -lpthread
+LIBS    := $(shell pkg-config --libs sdl3) -ljpeg -lm -lpthread
 
 # the C of the game and of C3Dlib, as the source's Makefiles link them
 # (the game's own list replaces C3Dlib's; sound and the tests aren't linked)
